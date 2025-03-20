@@ -30,23 +30,18 @@ Multibotnet 是一个基于 ROS 和 ZeroMQ 的分布式通信包，旨在实现�
 
 ### 安装步骤
 
-1. 安装 ROS（如果尚未安装）：
-   ```bash
-   sudo apt-get install ros-noetic-desktop-full
-   ```
-
-2. 安装 ZeroMQ 和 yaml-cpp：
+1. 安装 ZeroMQ 和 yaml-cpp：
    ```bash
    sudo apt-get install libzmq3-dev libyaml-cpp-dev
    ```
 
-3. 克隆 multibotnet 仓库到您的 catkin 工作空间：
+2. 克隆 multibotnet 仓库到您的 catkin 工作空间：
    ```bash
    cd ~/catkin_ws/src
    git clone https://github.com/your-repo/multibotnet.git
    ```
 
-4. 编译 multibotnet：
+3. 编译 multibotnet：
    ```bash
    cd ~/catkin_ws
    catkin_make
