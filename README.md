@@ -110,7 +110,3 @@ recv_topics:
 ```
 
 在 robot2 上，您可以通过 `/imu_recv` 话题接收来自 robot1 的 IMU 数据。
-
-## 许可证
-
-本项目采用 Apache-2.0 许可证。详情请参阅 LICENSE 文件。
