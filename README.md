@@ -111,16 +111,6 @@ recv_topics:
 
 在 robot2 上，您可以通过 `/imu_recv` 话题接收来自 robot1 的 IMU 数据。
 
-## 贡献指南
-
-欢迎对 multibotnet 进行贡献！请遵循以下步骤：
-
-1. Fork 本仓库。
-2. 创建一个新的分支 (`git checkout -b feature/your-feature`)。
-3. 提交您的更改 (`git commit -am 'Add your feature'`)。
-4. 推送到分支 (`git push origin feature/your-feature`)。
-5. 创建一个 Pull Request。
-
 ## 许可证
 
 本项目采用 Apache-2.0 许可证。详情请参阅 LICENSE 文件。
