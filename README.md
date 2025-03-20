@@ -22,7 +22,7 @@ Multibotnet 是一个基于 ROS 和 ZeroMQ 的分布式通信包，旨在实现�
 
 ## 安装指南
 
-### 依赖
+### 需要的依赖
 
 - ZeroMQ
 - yaml-cpp
