@@ -37,7 +37,7 @@ Multibotnet 是一个基于 ROS 和 ZeroMQ 的分布式通信包，旨在实现�
 2. 克隆 multibotnet 仓库到您的 catkin 工作空间：
    ```bash
    cd ~/catkin_ws/src
-   git clone https://github.com/your-repo/multibotnet.git
+   git clone https://github.com/nanwanuser/multibotnet.git
    ```
 
 3. 编译 multibotnet：
