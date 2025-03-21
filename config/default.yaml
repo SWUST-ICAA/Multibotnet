@@ -1,4 +1,4 @@
-# config.yaml
+# default.yaml
 
 # 默认支持的ROS消息类型：
 # sensor_msgs/Imu
