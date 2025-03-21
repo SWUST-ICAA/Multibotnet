@@ -7,7 +7,7 @@
 
 ### list all <IPname: IP> here (IPname can be set arbitrarily) ###
 IP:
-  self: '*'   # '*' stands for all self IPs
+  self: '192.168.101.35'   # '*' stands for all self IPs
   robot1: 192.168.1.101
   robot2: 192.168.1.102
   test_local: 127.0.0.1 # just for local machine test
@@ -18,19 +18,19 @@ send_topics:
 - topic_name: /imu
   msg_type: sensor_msgs/Imu
   max_freq: 50
-  srcIP: test_local
+  srcIP: self
   srcPort: 3001
 
 - topic_name: /cmd_vel
   msg_type: geometry_msgs/Twist
-  max_freq: 50
-  srcIP: test_local
+  max_freq: 40
+  srcIP: self
   srcPort: 3002
 
 - topic_name: /string
   msg_type: std_msgs/String
-  max_freq: 10
-  srcIP: test_local
+  max_freq: 15
+  srcIP: self
   srcPort: 3003
 
 ####### receive these ROS messages from remote robots #######

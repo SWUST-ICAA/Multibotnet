@@ -38,7 +38,7 @@ void ZmqManager::init(const std::string& config_file) {
                 int src_port = topic["srcPort"].as<int>();
 
                 if (src_ip == "self") {
-                    src_ip = getLocalIP();
+                    src_ip = "*"; // Bind to all interfaces
                 } else if (ip_map.find(src_ip) != ip_map.end()) {
                     src_ip = ip_map[src_ip];
                 } else {
@@ -57,7 +57,9 @@ void ZmqManager::init(const std::string& config_file) {
                 std::string src_ip = topic["srcIP"].as<std::string>();
                 int src_port = topic["srcPort"].as<int>();
 
-                if (ip_map.find(src_ip) != ip_map.end()) {
+                if (src_ip == "self") {
+                    src_ip = "127.0.0.1"; // Connect to loopback for local "self"
+                } else if (ip_map.find(src_ip) != ip_map.end()) {
                     src_ip = ip_map[src_ip];
                 } else {
                     ROS_ERROR("Invalid srcIP '%s' for recv_topic %s, skipping", src_ip.c_str(), topic_name.c_str());
@@ -109,6 +111,7 @@ void ZmqManager::sendTopic(const std::string& topic, const std::string& msg_type
 
     try {
         pub_socket.bind(address);
+        ROS_INFO("Successfully bound to %s for send_topic %s", address.c_str(), topic.c_str());
     } catch (const zmq::error_t& e) {
         ROS_ERROR("Failed to bind to %s for send_topic %s: %s", address.c_str(), topic.c_str(), e.what());
         ROS_ERROR("Check if port %d is in use or if IP %s is valid", src_port, src_ip.c_str());

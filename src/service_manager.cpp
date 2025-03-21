@@ -22,8 +22,12 @@ void ServiceManager::init(const std::string& config_file) {
     YAML::Node config = YAML::LoadFile(config_file);
     displayConfig(config);
 
+    std::map<std::string, std::string> ip_map;
+    for (const auto& ip : config["IP"]) {
+        ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
+    }
+
     if (config["services"]) {
-        // 预先为向量分配空间，避免重新分配导致引用失效
         size_t num_services = config["services"].size();
         rep_sockets_.reserve(num_services);
         service_servers_.reserve(num_services);
@@ -36,7 +40,12 @@ void ServiceManager::init(const std::string& config_file) {
             int src_port = service["srcPort"].as<int>();
 
             if (src_ip == "self") {
-                src_ip = getLocalIP();
+                src_ip = "*"; // Bind to all interfaces
+            } else if (ip_map.find(src_ip) != ip_map.end()) {
+                src_ip = ip_map[src_ip];
+            } else {
+                ROS_ERROR("Invalid srcIP '%s' for service %s, skipping", src_ip.c_str(), service_name.c_str());
+                continue;
             }
 
             startService(service_name, service_type, src_ip, src_port);
@@ -79,6 +88,7 @@ void ServiceManager::startService(const std::string& service_name, const std::st
 
     try {
         rep_socket.bind(address);
+        ROS_INFO("Successfully bound to %s for service %s", address.c_str(), service_name.c_str());
     } catch (const zmq::error_t& e) {
         ROS_ERROR("Failed to bind to %s: %s", address.c_str(), e.what());
         ROS_ERROR("Please check if the IP address is valid and the port %d is not in use.", src_port);
