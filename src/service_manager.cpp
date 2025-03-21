@@ -1,5 +1,3 @@
-// service_manager.cpp
-
 #include <multibotnet/service_manager.hpp>
 #include <multibotnet/ros_sub_pub.hpp>
 #include <yaml-cpp/yaml.h>
@@ -36,6 +34,8 @@ void ServiceManager::init(const std::string& config_file) {
         ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
     }
 
+    ros::NodeHandle nh;
+
     // 处理 provide_services
     if (config["provide_services"]) {
         size_t num_services = config["provide_services"].size();
@@ -55,6 +55,16 @@ void ServiceManager::init(const std::string& config_file) {
                 bind_address = ip_map[bind_address];
             } else {
                 ROS_ERROR("Invalid bind_address '%s' for provide_service %s", bind_address.c_str(), service_name.c_str());
+                continue;
+            }
+
+            // 注册 ROS 服务
+            if (service_type == "std_srvs/SetBool") {
+                service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleSetBool, this));
+            } else if (service_type == "nav_msgs/GetPlan") {
+                service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleGetPlan, this));
+            } else {
+                ROS_ERROR("Unsupported service type: %s", service_type.c_str());
                 continue;
             }
 
@@ -82,6 +92,14 @@ void ServiceManager::init(const std::string& config_file) {
             startRequestService(service_name, service_type, connect_address, port);
         }
     }
+
+    // 启动请求处理线程
+    service_threads_.emplace_back([this]() {
+        while (ros::ok()) {
+            processRequests();
+            ros::Duration(0.01).sleep(); // 10ms 间隔，避免占用过多 CPU
+        }
+    });
 }
 
 void ServiceManager::startProvideService(const std::string& service_name, 
@@ -90,50 +108,26 @@ void ServiceManager::startProvideService(const std::string& service_name,
                                         int port) {
     zmq::socket_t rep_socket(context_, ZMQ_REP);
     std::string address = "tcp://" + bind_address + ":" + std::to_string(port);
-    rep_socket.bind(address);
+    try {
+        rep_socket.bind(address);
+    } catch (const zmq::error_t& e) {
+        ROS_ERROR("Failed to bind service %s to %s: %s", service_name.c_str(), address.c_str(), e.what());
+        return;
+    }
+
     rep_sockets_.emplace_back(std::move(rep_socket));
     auto& current_socket = rep_sockets_.back();
 
-    ros::NodeHandle nh;
-    ros::ServiceServer server;
-
-    if (service_type == "std_srvs/SetBool") {
-        server = nh.advertiseService(service_name, &ServiceManager::handleSetBool, this);
-    } else if (service_type == "nav_msgs/GetPlan") {
-        server = nh.advertiseService(service_name, &ServiceManager::handleGetPlan, this);
-    } else {
-        ROS_ERROR("Unsupported service type: %s", service_type.c_str());
-        return;
-    }
-    service_servers_.push_back(server);
-
-    service_threads_.emplace_back([this, &current_socket, service_name, service_type]() {
+    service_threads_.emplace_back([this, &current_socket, service_type, service_name]() {
         while (ros::ok()) {
             zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
-            zmq::poll(items, 1, 100);
+            zmq::poll(items, 1, 100); // 100ms 超时
             if (!ros::ok()) break;
             if (items[0].revents & ZMQ_POLLIN) {
                 zmq::message_t request;
                 if (current_socket.recv(request)) {
-                    if (service_type == "std_srvs/SetBool") {
-                        auto req = deserializeMsg<std_srvs::SetBool::Request>(
-                            static_cast<uint8_t*>(request.data()), request.size());
-                        std_srvs::SetBool::Response res;
-                        handleSetBool(req, res);
-                        auto buffer = serializeMsg(res);
-                        zmq::message_t reply(buffer.size());
-                        memcpy(reply.data(), buffer.data(), buffer.size());
-                        current_socket.send(reply);
-                    } else if (service_type == "nav_msgs/GetPlan") {
-                        auto req = deserializeMsg<nav_msgs::GetPlan::Request>(
-                            static_cast<uint8_t*>(request.data()), request.size());
-                        nav_msgs::GetPlan::Response res;
-                        handleGetPlan(req, res);
-                        auto buffer = serializeMsg(res);
-                        zmq::message_t reply(buffer.size());
-                        memcpy(reply.data(), buffer.data(), buffer.size());
-                        current_socket.send(reply);
-                    }
+                    std::lock_guard<std::mutex> lock(queue_mutex_);
+                    request_queue_.push({service_type, std::move(request), &current_socket});
                 }
             }
         }
@@ -146,8 +140,43 @@ void ServiceManager::startRequestService(const std::string& service_name,
                                         int port) {
     zmq::socket_t req_socket(context_, ZMQ_REQ);
     std::string address = "tcp://" + connect_address + ":" + std::to_string(port);
-    req_socket.connect(address);
+    try {
+        req_socket.connect(address);
+    } catch (const zmq::error_t& e) {
+        ROS_ERROR("Failed to connect to service %s at %s: %s", service_name.c_str(), address.c_str(), e.what());
+        return;
+    }
     req_sockets_[service_name] = std::move(req_socket);
+}
+
+void ServiceManager::processRequests() {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    while (!request_queue_.empty()) {
+        auto req_data = std::move(request_queue_.front());
+        request_queue_.pop();
+
+        zmq::socket_t* rep_socket = req_data.rep_socket;
+
+        if (req_data.service_type == "std_srvs/SetBool") {
+            auto req = deserializeMsg<std_srvs::SetBool::Request>(
+                static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
+            std_srvs::SetBool::Response res;
+            handleSetBool(req, res);
+            auto buffer = serializeMsg(res);
+            zmq::message_t reply(buffer.size());
+            memcpy(reply.data(), buffer.data(), buffer.size());
+            rep_socket->send(reply, zmq::send_flags::none);
+        } else if (req_data.service_type == "nav_msgs/GetPlan") {
+            auto req = deserializeMsg<nav_msgs::GetPlan::Request>(
+                static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
+            nav_msgs::GetPlan::Response res;
+            handleGetPlan(req, res);
+            auto buffer = serializeMsg(res);
+            zmq::message_t reply(buffer.size());
+            memcpy(reply.data(), buffer.data(), buffer.size());
+            rep_socket->send(reply, zmq::send_flags::none);
+        }
+    }
 }
 
 template<typename ServiceType>
