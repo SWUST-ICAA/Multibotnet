@@ -1,78 +1,79 @@
 # default.yaml
 
 # 默认支持的ROS消息类型：
-# sensor_msgs/Imu
-# geometry_msgs/Twist
-# std_msgs/String
-# (如果需要更多，请在ros_sub_pub.hpp中修改/添加)
+# sensor_msgs/Imu, geometry_msgs/Twist, std_msgs/String
+# 服务类型：std_srvs/SetBool, nav_msgs/GetPlan
+# (如需更多类型，请在ros_sub_pub.hpp中添加)
 
 # 支持的最大send_topics数量：50
 
-# 列出所有<IPname: IP>的映射（IPname可以任意设置）
+# IP映射
 IP:
-  self: '*'   # '*' 表示所有本机IP
-  robot1: 192.168.1.101    # 机器人1的IP
-  robot2: 192.168.1.102    # 机器人2的IP
-  test_local: 127.0.0.1    # 仅用于本地机器测试
+  self: '*'           # '*' 表示所有本机IP
+  robot1: 192.168.1.101
+  robot2: 192.168.1.102
+  test_local: 127.0.0.1
 
-# 发送这些ROS消息到远程机器人
-# 如果不需要send_topics，请注释掉以下内容
+# 发送话题配置
 send_topics:
-- topic_name: /imu          # IMU话题
-  msg_type: sensor_msgs/Imu # 消息类型
-  max_freq: 50              # 最大发送频率 (Hz)
-  srcIP: self               # 源IP，使用IP映射中的self
-  srcPort: 3001             # 源端口
+- topic: /imu
+  message_type: sensor_msgs/Imu
+  max_frequency: 50
+  bind_address: self
+  port: 3001
+- topic: /cmd_vel
+  message_type: geometry_msgs/Twist
+  max_frequency: 40
+  bind_address: self
+  port: 3002
+- topic: /string
+  message_type: std_msgs/String
+  max_frequency: 15
+  bind_address: self
+  port: 3003
+- topic: /test1
+  message_type: std_msgs/String
+  max_frequency: 20
+  bind_address: self
+  port: 3004
 
-- topic_name: /cmd_vel      # 速度指令话题
-  msg_type: geometry_msgs/Twist
-  max_freq: 40
-  srcIP: self
-  srcPort: 3002
-
-- topic_name: /string       # 字符串话题
-  msg_type: std_msgs/String
-  max_freq: 15
-  srcIP: self
-  srcPort: 3003
-
-- topic_name: /test1        # 测试话题
-  msg_type: std_msgs/String
-  max_freq: 20
-  srcIP: self
-  srcPort: 3004
-
-# 从远程机器人接收这些ROS消息
-# 如果不需要recv_topics，请注释掉以下内容
+# 接收话题配置
 recv_topics:
-- topic_name: /imu_recv     # 接收的IMU话题
-  msg_type: sensor_msgs/Imu
-  srcIP: test_local         # 源IP，使用本地测试地址
-  srcPort: 3001             # 源端口
+- topic: /imu_recv
+  message_type: sensor_msgs/Imu
+  connect_address: test_local
+  port: 3001
+- topic: /cmd_vel_recv
+  message_type: geometry_msgs/Twist
+  connect_address: test_local
+  port: 3002
+- topic: /string_recv
+  message_type: std_msgs/String
+  connect_address: test_local
+  port: 3003
+- topic: /test1_recv
+  message_type: std_msgs/String
+  connect_address: test_local
+  port: 3004
 
-- topic_name: /cmd_vel_recv # 接收的速度指令话题
-  msg_type: geometry_msgs/Twist
-  srcIP: test_local
-  srcPort: 3002
-
-- topic_name: /string_recv  # 接收的字符串话题
-  msg_type: std_msgs/String
-  srcIP: test_local
-  srcPort: 3003
-
-- topic_name: /test1_recv        # 接收的测试话题
-  msg_type: std_msgs/String
-  srcIP: test_local
-  srcPort: 3004
-
-# 服务配置
-services:
-- service_name: /set_bool   # SetBool服务
+# 提供服务配置（接收请求，REP模式）
+provide_services:
+- service_name: /set_bool
   service_type: std_srvs/SetBool
-  srcIP: self               # 源IP
-  srcPort: 5555             # 源端口
-
-- service_name: /get_plan   # GetPlan服务
+  bind_address: self
+  port: 5555
+- service_name: /get_plan
   service_type: nav_msgs/GetPlan
-  srcIP: self
-  srcPort: 5556
+  bind_address: self
+  port: 5556
+
+# 请求服务配置（发送请求，REQ模式）
+request_services:
+- service_name: /remote_set_bool
+  service_type: std_srvs/SetBool
+  connect_address: robot1
+  port: 5555
+- service_name: /remote_get_plan
+  service_type: nav_msgs/GetPlan
+  connect_address: robot2
+  port: 5556
