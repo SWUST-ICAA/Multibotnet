@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <unordered_set>
 
 namespace multibotnet {
 
@@ -184,14 +185,26 @@ void ZmqManager::recvTopic(const std::string& topic, const std::string& msg_type
         pub = nh.advertise<std_msgs::String>(topic, 1);
     }
 
-    recv_threads_.emplace_back([this, &current_socket, pub, msg_type, topic]() {
+    static std::unordered_set<std::string> logged_topics;
+    static std::mutex log_mutex;
+
+    recv_threads_.emplace_back([this, &current_socket, pub, msg_type, topic, &logged_topics, &log_mutex]() {
+        bool first_message = true;
         while (ros::ok()) {
             zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
-            zmq::poll(items, 1, 100);
+            zmq::poll(items, 1, 100); // 100ms timeout
             if (!ros::ok()) break;
             if (items[0].revents & ZMQ_POLLIN) {
                 zmq::message_t zmq_msg;
                 if (current_socket.recv(zmq_msg)) {
+                    if (first_message) {
+                        std::lock_guard<std::mutex> lock(log_mutex);
+                        if (logged_topics.find(topic) == logged_topics.end()) {
+                            ROS_INFO("[multibotnet_topic_node] \"%s\" received!", topic.c_str());
+                            logged_topics.insert(topic);
+                        }
+                        first_message = false;
+                    }
                     if (msg_type == "sensor_msgs/Imu") {
                         sensor_msgs::Imu msg = deserializeMsg<sensor_msgs::Imu>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
