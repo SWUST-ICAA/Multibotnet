@@ -8,6 +8,13 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <unordered_set>
+#include <iostream>
+
+#define RESET   "\033[0m"  // Reset to default color
+#define RED     "\033[31m" // Red text
+#define GREEN   "\033[32m" // Green text
+#define YELLOW  "\033[33m" // Yellow text
+#define BLUE    "\033[34m" // Blue text
 
 namespace multibotnet {
 
@@ -109,15 +116,8 @@ void ZmqManager::sendTopic(const std::string& topic, const std::string& msg_type
     zmq::socket_t pub_socket(context_, ZMQ_PUB);
     std::string address = "tcp://" + src_ip + ":" + std::to_string(src_port);
 
-    try {
-        pub_socket.bind(address);
-        ROS_INFO("Successfully bound to %s for send_topic %s", address.c_str(), topic.c_str());
-    } catch (const zmq::error_t& e) {
-        ROS_ERROR("Failed to bind to %s for send_topic %s: %s", address.c_str(), topic.c_str(), e.what());
-        ROS_ERROR("Check if port %d is in use or if IP %s is valid", src_port, src_ip.c_str());
-        return;
-    }
 
+    pub_socket.bind(address);
     pub_sockets_.emplace_back(std::move(pub_socket));
     auto& current_socket = pub_sockets_.back();
 
@@ -225,24 +225,29 @@ void ZmqManager::recvTopic(const std::string& topic, const std::string& msg_type
 }
 
 void ZmqManager::displayConfig(const YAML::Node& config) {
-    ROS_INFO("-------------IP------------");
+    // IP Section
+    std::cout << BLUE << "-------------IP------------" << RESET << std::endl;
     for (const auto& ip : config["IP"]) {
-        ROS_INFO("%s : %s", ip.first.as<std::string>().c_str(), ip.second.as<std::string>().c_str());
+        std::cout << YELLOW << ip.first.as<std::string>() << " : " << ip.second.as<std::string>() << RESET << std::endl;
     }
-    ROS_INFO("--------send topics--------");
+
+    // Send Topics Section
+    std::cout << BLUE << "--------send topics--------" << RESET << std::endl;
     if (config["send_topics"]) {
         for (const auto& topic : config["send_topics"]) {
             std::string topic_name = topic["topic_name"].as<std::string>();
             int max_freq = topic["max_freq"].as<int>();
-            ROS_INFO("%s  %dHz(max)", topic_name.c_str(), max_freq);
+            std::cout << GREEN << topic_name << "  " << max_freq << "Hz(max)" << RESET << std::endl;
         }
     }
-    ROS_INFO("-------receive topics------");
+
+    // Receive Topics Section
+    std::cout << BLUE << "-------receive topics------" << RESET << std::endl;
     if (config["recv_topics"]) {
         for (const auto& topic : config["recv_topics"]) {
             std::string topic_name = topic["topic_name"].as<std::string>();
             std::string src_ip = topic["srcIP"].as<std::string>();
-            ROS_INFO("%s  (from %s)", topic_name.c_str(), src_ip.c_str());
+            std::cout << GREEN << topic_name << "  (from " << src_ip << ")" << RESET << std::endl;
         }
     }
 }

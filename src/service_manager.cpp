@@ -7,6 +7,13 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <zmq.hpp>
+#include <iostream>
+
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
 
 namespace multibotnet {
 
@@ -86,15 +93,7 @@ void ServiceManager::startService(const std::string& service_name, const std::st
     zmq::socket_t rep_socket(context_, ZMQ_REP);
     std::string address = "tcp://" + src_ip + ":" + std::to_string(src_port);
 
-    try {
-        rep_socket.bind(address);
-        ROS_INFO("Successfully bound to %s for service %s", address.c_str(), service_name.c_str());
-    } catch (const zmq::error_t& e) {
-        ROS_ERROR("Failed to bind to %s: %s", address.c_str(), e.what());
-        ROS_ERROR("Please check if the IP address is valid and the port %d is not in use.", src_port);
-        return;
-    }
-
+    rep_socket.bind(address);
     rep_sockets_.emplace_back(std::move(rep_socket));
     auto& current_socket = rep_sockets_.back();
 
@@ -159,12 +158,12 @@ bool ServiceManager::handleGetPlan(nav_msgs::GetPlan::Request& req, nav_msgs::Ge
 }
 
 void ServiceManager::displayConfig(const YAML::Node& config) {
-    ROS_INFO("-------services-------");
+    std::cout << BLUE << "-------services-------" << RESET << std::endl;
     if (config["services"]) {
         for (const auto& service : config["services"]) {
             std::string service_name = service["service_name"].as<std::string>();
             std::string src_ip = service["srcIP"].as<std::string>();
-            ROS_INFO("%s  (at %s)", service_name.c_str(), src_ip.c_str());
+            std::cout << GREEN << service_name << "  (at " << src_ip << ")" << RESET << std::endl;
         }
     }
 }
