@@ -236,7 +236,7 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
         for (const auto& topic : config["send_topics"]) {
             std::string topic_name = topic["topic"].as<std::string>();
             int max_frequency = topic["max_frequency"].as<int>();
-            std::cout << GREEN << topic_name << "  " << max_frequency << "Hz(max)" << RESET << std::endl;
+            std::cout << GREEN << topic_name << "  " << max_frequency << "Hz(max_frequency)" << RESET << std::endl;
         }
     }
 
@@ -245,7 +245,7 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
         for (const auto& topic : config["recv_topics"]) {
             std::string topic_name = topic["topic"].as<std::string>();
             std::string connect_address = topic["connect_address"].as<std::string>();
-            std::cout << GREEN << topic_name << "  (from " << connect_address << ")" << RESET << std::endl;
+            std::cout << GREEN << topic_name << "  (IP from " << connect_address << ")" << RESET << std::endl;
         }
     }
 }

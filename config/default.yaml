@@ -12,6 +12,7 @@ IP:
   self: '*'           # '*' 表示所有本机IP
   robot1: 192.168.1.101
   robot2: 192.168.1.102
+  robot3: 192.168.1.103
   test_local: 127.0.0.1
 
 # 发送话题配置
@@ -71,9 +72,9 @@ provide_services:
 request_services:
 - service_name: /remote_set_bool
   service_type: std_srvs/SetBool
-  connect_address: robot1
+  connect_address: test_local
   port: 5555
 - service_name: /remote_get_plan
   service_type: nav_msgs/GetPlan
-  connect_address: robot2
+  connect_address: test_local
   port: 5556

@@ -1,5 +1,9 @@
 #include <ros/ros.h>            
 #include <multibotnet/zmq_manager.hpp> 
+#include <iostream>
+
+#define PURPLE "\033[35m"
+#define RESET "\033[0m"
 
 int main(int argc, char** argv) {
 
@@ -16,6 +20,14 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    std::cout << PURPLE
+              << " _   _                                \n"
+              << "| \\ | | __ _ _ ____      ____ _ _ __  \n"
+              << "|  \\| |/ _` | '_ \\ \\ /\\ / / _` | '_ \\ \n"
+              << "| |\\  | (_| | | | \\ V  V / (_| | | | |\n"
+              << "|_| \\_|\\__,_|_| |_|\\_/\\_/ \\__,_|_| |_|\n"
+              << RESET << std::endl;
+
     // 创建ZmqManager对象，用于管理ZeroMQ通信
     multibotnet::ZmqManager zmq_manager;
     
