@@ -38,7 +38,6 @@ void ZmqManager::init(const std::string& config_file) {
 
                 if (src_ip == "self") {
                     src_ip = getLocalIP();
-                    ROS_INFO("Resolved 'self' to local IP: %s for send_topic %s", src_ip.c_str(), topic_name.c_str());
                 } else if (ip_map.find(src_ip) != ip_map.end()) {
                     src_ip = ip_map[src_ip];
                 } else {
@@ -109,7 +108,6 @@ void ZmqManager::sendTopic(const std::string& topic, const std::string& msg_type
 
     try {
         pub_socket.bind(address);
-        ROS_INFO("Successfully bound to %s for send_topic %s", address.c_str(), topic.c_str());
     } catch (const zmq::error_t& e) {
         ROS_ERROR("Failed to bind to %s for send_topic %s: %s", address.c_str(), topic.c_str(), e.what());
         ROS_ERROR("Check if port %d is in use or if IP %s is valid", src_port, src_ip.c_str());
@@ -117,7 +115,7 @@ void ZmqManager::sendTopic(const std::string& topic, const std::string& msg_type
     }
 
     pub_sockets_.emplace_back(std::move(pub_socket));
-    zmq::socket_t& current_socket = pub_sockets_.back();
+    auto& current_socket = pub_sockets_.back();
 
     ros::NodeHandle nh;
     ros::Subscriber sub;
@@ -153,12 +151,8 @@ void ZmqManager::sendTopic(const std::string& topic, const std::string& msg_type
                 }
                 ros::Rate(max_freq).sleep();
             });
-        } else {
-            ROS_ERROR("Unsupported message type '%s' for send_topic %s", msg_type.c_str(), topic.c_str());
-            return;
         }
         subscribers_.push_back(sub);
-        ROS_INFO("Subscribed to ROS topic %s with msg_type %s", topic.c_str(), msg_type.c_str());
     } catch (const std::exception& e) {
         ROS_ERROR("Error subscribing to topic %s: %s", topic.c_str(), e.what());
     }
@@ -172,59 +166,44 @@ void ZmqManager::recvTopic(const std::string& topic, const std::string& msg_type
     try {
         sub_socket.connect(address);
         sub_socket.setsockopt(ZMQ_SUBSCRIBE, "", 0);
-        ROS_INFO("Successfully connected to %s for recv_topic %s", address.c_str(), topic.c_str());
     } catch (const zmq::error_t& e) {
         ROS_ERROR("Failed to connect to %s for recv_topic %s: %s", address.c_str(), topic.c_str(), e.what());
-        ROS_ERROR("Check if IP %s and port %d are correct", src_ip.c_str(), src_port);
         return;
     }
 
     sub_sockets_.emplace_back(std::move(sub_socket));
-    zmq::socket_t& current_socket = sub_sockets_.back();
+    auto& current_socket = sub_sockets_.back();
 
     ros::NodeHandle nh;
     ros::Publisher pub;
-
-    try {
-        if (msg_type == "sensor_msgs/Imu") {
-            pub = nh.advertise<sensor_msgs::Imu>(topic, 1);
-        } else if (msg_type == "geometry_msgs/Twist") {
-            pub = nh.advertise<geometry_msgs::Twist>(topic, 1);
-        } else if (msg_type == "std_msgs/String") {
-            pub = nh.advertise<std_msgs::String>(topic, 1);
-        } else {
-            ROS_ERROR("Unsupported message type '%s' for recv_topic %s", msg_type.c_str(), topic.c_str());
-            return;
-        }
-        ROS_INFO("Advertising ROS topic %s with msg_type %s", topic.c_str(), msg_type.c_str());
-    } catch (const std::exception& e) {
-        ROS_ERROR("Error advertising topic %s: %s", topic.c_str(), e.what());
-        return;
+    if (msg_type == "sensor_msgs/Imu") {
+        pub = nh.advertise<sensor_msgs::Imu>(topic, 1);
+    } else if (msg_type == "geometry_msgs/Twist") {
+        pub = nh.advertise<geometry_msgs::Twist>(topic, 1);
+    } else if (msg_type == "std_msgs/String") {
+        pub = nh.advertise<std_msgs::String>(topic, 1);
     }
 
     recv_threads_.emplace_back([this, &current_socket, pub, msg_type, topic]() {
         while (ros::ok()) {
-            zmq::message_t zmq_msg;
-            try {
-                if (current_socket.recv(zmq_msg, zmq::recv_flags::none)) {
+            zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
+            zmq::poll(items, 1, 100);
+            if (!ros::ok()) break;
+            if (items[0].revents & ZMQ_POLLIN) {
+                zmq::message_t zmq_msg;
+                if (current_socket.recv(zmq_msg)) {
                     if (msg_type == "sensor_msgs/Imu") {
-                        auto msg = deserializeMsg<sensor_msgs::Imu>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        sensor_msgs::Imu msg = deserializeMsg<sensor_msgs::Imu>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
-                        ROS_INFO("[bridge node] '%s' received!", topic.c_str());
                     } else if (msg_type == "geometry_msgs/Twist") {
-                        auto msg = deserializeMsg<geometry_msgs::Twist>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        geometry_msgs::Twist msg = deserializeMsg<geometry_msgs::Twist>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
-                        ROS_INFO("[bridge node] '%s' received!", topic.c_str());
                     } else if (msg_type == "std_msgs/String") {
-                        auto msg = deserializeMsg<std_msgs::String>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        std_msgs::String msg = deserializeMsg<std_msgs::String>(static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
-                        ROS_INFO("[bridge node] '%s' received!", topic.c_str());
                     }
                 }
-            } catch (const std::exception& e) {
-                ROS_ERROR("Error receiving or publishing on topic %s: %s", topic.c_str(), e.what());
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     });
 }

@@ -18,19 +18,19 @@ send_topics:
 - topic_name: /imu
   msg_type: sensor_msgs/Imu
   max_freq: 50
-  srcIP: self
+  srcIP: test_local
   srcPort: 3001
 
 - topic_name: /cmd_vel
   msg_type: geometry_msgs/Twist
   max_freq: 50
-  srcIP: self
+  srcIP: test_local
   srcPort: 3002
 
 - topic_name: /string
   msg_type: std_msgs/String
   max_freq: 10
-  srcIP: self
+  srcIP: test_local
   srcPort: 3003
 
 ####### receive these ROS messages from remote robots #######
