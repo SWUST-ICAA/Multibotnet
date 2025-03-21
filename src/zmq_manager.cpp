@@ -20,7 +20,8 @@
 
 namespace multibotnet {
 
-ZmqManager::ZmqManager() : context_(1) {}
+ZmqManager::ZmqManager() : context_(1) {
+}
 
 ZmqManager::~ZmqManager() {
     for (auto& th : recv_threads_) {
@@ -38,6 +39,15 @@ void ZmqManager::init(const std::string& config_file) {
             ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
         }
 
+        // 计算发送和接收话题数量以预分配空间
+        size_t send_topic_count = config["send_topics"] ? config["send_topics"].size() : 0;
+
+        // 初始化频率控制变量
+        send_t_last_.resize(send_topic_count);
+        send_num_.resize(send_topic_count, 0);
+        max_frequencies_.resize(send_topic_count);
+
+        int send_index = 0;
         if (config["send_topics"]) {
             for (const auto& topic : config["send_topics"]) {
                 std::string topic_name = topic["topic"].as<std::string>();
@@ -55,7 +65,10 @@ void ZmqManager::init(const std::string& config_file) {
                     continue;
                 }
 
+                max_frequencies_[send_index] = max_frequency;  // 存储最大频率
+                send_t_last_[send_index] = ros::Time::now();  // 初始化时间
                 sendTopic(topic_name, message_type, max_frequency, bind_address, port);
+                send_index++;
             }
         }
 
@@ -86,10 +99,10 @@ void ZmqManager::init(const std::string& config_file) {
 }
 
 void ZmqManager::sendTopic(const std::string& topic, 
-                          const std::string& message_type, 
-                          int max_frequency,
-                          const std::string& bind_address, 
-                          int port) {
+                           const std::string& message_type, 
+                           int max_frequency,
+                           const std::string& bind_address, 
+                           int port) {
     zmq::socket_t pub_socket(context_, ZMQ_PUB);
     std::string address = "tcp://" + bind_address + ":" + std::to_string(port);
     pub_socket.bind(address);
@@ -99,37 +112,46 @@ void ZmqManager::sendTopic(const std::string& topic,
     ros::NodeHandle nh;
     ros::Subscriber sub;
 
+    // 获取当前话题的索引
+    int index = subscribers_.size();
+
     try {
         if (message_type == "sensor_msgs/Imu") {
-            sub = nh.subscribe<sensor_msgs::Imu>(topic, 1, [this, &current_socket, max_frequency, topic](const sensor_msgs::Imu::ConstPtr& msg) {
-                auto buffer = serializeMsg(*msg);
-                zmq::message_t zmq_msg(buffer.size());
-                memcpy(zmq_msg.data(), buffer.data(), buffer.size());
-                if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
-                    ROS_ERROR("Failed to send message on topic %s", topic.c_str());
-                }
-                ros::Rate(max_frequency).sleep();
-            });
+            sub = nh.subscribe<sensor_msgs::Imu>(topic, 1, 
+                [this, &current_socket, index, topic](const sensor_msgs::Imu::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
         } else if (message_type == "geometry_msgs/Twist") {
-            sub = nh.subscribe<geometry_msgs::Twist>(topic, 1, [this, &current_socket, max_frequency, topic](const geometry_msgs::Twist::ConstPtr& msg) {
-                auto buffer = serializeMsg(*msg);
-                zmq::message_t zmq_msg(buffer.size());
-                memcpy(zmq_msg.data(), buffer.data(), buffer.size());
-                if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
-                    ROS_ERROR("Failed to send message on topic %s", topic.c_str());
-                }
-                ros::Rate(max_frequency).sleep();
-            });
+            sub = nh.subscribe<geometry_msgs::Twist>(topic, 1, 
+                [this, &current_socket, index, topic](const geometry_msgs::Twist::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
         } else if (message_type == "std_msgs/String") {
-            sub = nh.subscribe<std_msgs::String>(topic, 1, [this, &current_socket, max_frequency, topic](const std_msgs::String::ConstPtr& msg) {
-                auto buffer = serializeMsg(*msg);
-                zmq::message_t zmq_msg(buffer.size());
-                memcpy(zmq_msg.data(), buffer.data(), buffer.size());
-                if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
-                    ROS_ERROR("Failed to send message on topic %s", topic.c_str());
-                }
-                ros::Rate(max_frequency).sleep();
-            });
+            sub = nh.subscribe<std_msgs::String>(topic, 1, 
+                [this, &current_socket, index, topic](const std_msgs::String::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
         }
         subscribers_.push_back(sub);
     } catch (const std::exception& e) {
@@ -138,9 +160,9 @@ void ZmqManager::sendTopic(const std::string& topic,
 }
 
 void ZmqManager::recvTopic(const std::string& topic, 
-                          const std::string& message_type,
-                          const std::string& connect_address, 
-                          int port) {
+                           const std::string& message_type,
+                           const std::string& connect_address, 
+                           int port) {
     zmq::socket_t sub_socket(context_, ZMQ_SUB);
     std::string address = "tcp://" + connect_address + ":" + std::to_string(port);
 
@@ -172,7 +194,7 @@ void ZmqManager::recvTopic(const std::string& topic,
         bool first_message = true;
         while (ros::ok()) {
             zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
-            zmq::poll(items, 1, 100);
+            zmq::poll(items, 1, 100);  // 100ms超时，避免忙等待
             if (!ros::ok()) break;
             if (items[0].revents & ZMQ_POLLIN) {
                 zmq::message_t zmq_msg;
@@ -226,6 +248,23 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
             std::string connect_address = topic["connect_address"].as<std::string>();
             std::cout << GREEN << topic_name << "  (from " << connect_address << ")" << RESET << std::endl;
         }
+    }
+}
+
+bool ZmqManager::send_freq_control(int index) {
+    ros::Time t_now = ros::Time::now();
+    double elapsed = (t_now - send_t_last_[index]).toSec();
+    int max_freq = max_frequencies_[index];
+
+    if ((send_num_[index] + 1) / elapsed > max_freq) {
+        return false;  // 超过频率限制，不发送
+    } else {
+        send_num_[index]++;
+        if (elapsed > 1.0) {  // 每秒重置一次计数器
+            send_t_last_[index] = t_now;
+            send_num_[index] = 0;
+        }
+        return true;  // 允许发送
     }
 }
 
