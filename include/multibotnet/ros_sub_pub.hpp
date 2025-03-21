@@ -12,12 +12,11 @@
 #include <geometry_msgs/Point.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Int32.h>
-// 添加自定义消息类型头文件，例如：
-// #include <your_package/YourMessage.h>
+#include <std_srvs/SetBool.h>
+#include <nav_msgs/GetPlan.h>
 
 namespace multibotnet {
 
-// 获取消息类型对应的字符串，用于配置解析
 inline std::string getMsgType(const std::string& type) {
     if (type == "sensor_msgs/Imu") return "sensor_msgs::Imu";
     if (type == "geometry_msgs/Twist") return "geometry_msgs::Twist";
@@ -29,12 +28,11 @@ inline std::string getMsgType(const std::string& type) {
     if (type == "geometry_msgs/Point") return "geometry_msgs::Point";
     if (type == "std_msgs/Float32") return "std_msgs::Float32";
     if (type == "std_msgs/Int32") return "std_msgs::Int32";
-    // 添加自定义类型映射，例如：
-    // if (type == "your_package/YourMessage") return "your_package::YourMessage";
-    return type;  // 对于未映射的类型，直接返回原始字符串
+    if (type == "std_srvs/SetBool") return "std_srvs::SetBool";
+    if (type == "nav_msgs/GetPlan") return "nav_msgs::GetPlan";
+    return type;
 }
 
-// 模板函数：序列化消息
 template<typename T>
 std::vector<uint8_t> serializeMsg(const T& msg) {
     uint32_t serial_size = ros::serialization::serializationLength(msg);
@@ -44,7 +42,6 @@ std::vector<uint8_t> serializeMsg(const T& msg) {
     return buffer;
 }
 
-// 模板函数：反序列化消息
 template<typename T>
 T deserializeMsg(const uint8_t* data, size_t size) {
     T msg;

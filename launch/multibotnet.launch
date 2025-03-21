@@ -1,5 +1,8 @@
 <launch>
-    <node pkg="multibotnet" type="multibotnet_node" name="multibotnet_node" output="screen">
+    <node pkg="multibotnet" type="multibotnet_topic_node" name="multibotnet_topic_node" output="screen">
+        <param name="config_file" value="$(find multibotnet)/config/default.yaml"/>
+    </node>
+    <node pkg="multibotnet" type="multibotnet_service_node" name="multibotnet_service_node" output="screen">
         <param name="config_file" value="$(find multibotnet)/config/default.yaml"/>
     </node>
 </launch>

@@ -50,3 +50,15 @@ recv_topics:
   msg_type: std_msgs/String
   srcIP: test_local
   srcPort: 3003
+
+####### Services #######
+services:
+- service_name: /set_bool
+  service_type: std_srvs/SetBool
+  srcIP: self
+  srcPort: 5555
+
+- service_name: /get_plan
+  service_type: nav_msgs/GetPlan
+  srcIP: self
+  srcPort: 5556

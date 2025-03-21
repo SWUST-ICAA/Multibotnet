@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <ros/ros.h>
+#include <yaml-cpp/yaml.h>
 
 namespace multibotnet {
 
@@ -29,6 +30,8 @@ private:
                    const std::string& src_ip, int src_port);
     void recvTopic(const std::string& topic, const std::string& msg_type,
                    const std::string& src_ip, int src_port);
+    void displayConfig(const YAML::Node& config);
+    std::string getLocalIP();  // 新增的 getLocalIP 函数声明
 };
 
 } // namespace multibotnet
