@@ -1,5 +1,3 @@
-// zmq_manager.cpp
-
 #include <multibotnet/zmq_manager.hpp>
 #include <multibotnet/ros_sub_pub.hpp>
 #include <yaml-cpp/yaml.h>
@@ -190,7 +188,8 @@ void ZmqManager::recvTopic(const std::string& topic,
     static std::unordered_set<std::string> logged_topics;
     static std::mutex log_mutex;
 
-    recv_threads_.emplace_back([this, &current_socket, pub, message_type, topic, &logged_topics, &log_mutex]() {
+    // 修改后的 lambda，去掉 &logged_topics 和 &log_mutex 的捕获
+    recv_threads_.emplace_back([this, &current_socket, pub, message_type, topic]() {
         bool first_message = true;
         while (ros::ok()) {
             zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
@@ -200,8 +199,8 @@ void ZmqManager::recvTopic(const std::string& topic,
                 zmq::message_t zmq_msg;
                 if (current_socket.recv(zmq_msg)) {
                     if (first_message) {
-                        std::lock_guard<std::mutex> lock(log_mutex);
-                        if (logged_topics.find(topic) == logged_topics.end()) {
+                        std::lock_guard<std::mutex> lock(log_mutex);  // 直接使用 log_mutex
+                        if (logged_topics.find(topic) == logged_topics.end()) {  // 直接使用 logged_topics
                             ROS_INFO("[multibotnet_topic_node] \"%s\" received!", topic.c_str());
                             logged_topics.insert(topic);
                         }
