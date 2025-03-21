@@ -17,16 +17,6 @@ int main(int argc, char** argv) {
     multibotnet::ServiceManager service_manager;
     service_manager.init(config_file);
 
-    // // 示例：调用远程服务
-    // std_srvs::SetBool::Request req;
-    // req.data = true;
-    // std_srvs::SetBool::Response res;
-    // if (service_manager.callService<std_srvs::SetBool>("/remote_set_bool", req, res)) {
-    //     ROS_INFO("Service call successful: %s", res.message.c_str());
-    // } else {
-    //     ROS_ERROR("Service call failed");
-    // }
-
     ros::spin();
     return 0;
 }
