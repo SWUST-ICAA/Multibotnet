@@ -234,7 +234,32 @@ void ZmqManager::sendTopic(const std::string& topic,
                         }
                     }
                 });
-        } else {
+        } else if (message_type == "geometry_msgs/PoseStamped") {
+            sub = nh.subscribe<geometry_msgs::PoseStamped>(topic, 1, 
+                [this, &current_socket, index, topic](const geometry_msgs::PoseStamped::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        }
+        else if (message_type == "sensor_msgs/PointCloud2") {
+            sub = nh.subscribe<sensor_msgs::PointCloud2>(topic, 1, 
+                [this, &current_socket, index, topic](const sensor_msgs::PointCloud2::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        }else {
             ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
             return;
         }
@@ -286,6 +311,10 @@ void ZmqManager::recvTopic(const std::string& topic,
         pub = nh.advertise<std_msgs::Float32>(topic, 1);
     } else if (message_type == "std_msgs/Int32") {
         pub = nh.advertise<std_msgs::Int32>(topic, 1);
+    } else if (message_type == "geometry_msgs/PoseStamped") {
+        pub = nh.advertise<geometry_msgs::PoseStamped>(topic, 1);
+    } else if (message_type == "sensor_msgs/PointCloud2") {
+        pub = nh.advertise<sensor_msgs::PointCloud2>(topic, 1);
     } else {
         ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
         return;
@@ -351,6 +380,17 @@ void ZmqManager::recvTopic(const std::string& topic,
                         std_msgs::Int32 msg = deserializeMsg<std_msgs::Int32>(
                             static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
+                    } else if (message_type == "geometry_msgs/PoseStamped") {
+                        geometry_msgs::PoseStamped msg = deserializeMsg<geometry_msgs::PoseStamped>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "sensor_msgs/PointCloud2") {
+                        sensor_msgs::PointCloud2 msg = deserializeMsg<sensor_msgs::PointCloud2>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else {
+                        ROS_ERROR("Failed to deserialize message of type '%s' for topic %s", 
+                                  message_type.c_str(), topic.c_str());
                     }
                 }
             }

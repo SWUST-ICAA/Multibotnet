@@ -14,6 +14,8 @@
 #include <std_msgs/Int32.h>     
 #include <std_srvs/SetBool.h>   
 #include <nav_msgs/GetPlan.h>   
+#include <geometry_msgs/PoseStamped.h>
+#include <sensor_msgs/PointCloud2.h>
 
 namespace multibotnet {
 
@@ -31,6 +33,9 @@ inline std::string getMsgType(const std::string& type) {
     if (type == "std_msgs/Int32") return "std_msgs::Int32";
     if (type == "std_srvs/SetBool") return "std_srvs::SetBool";
     if (type == "nav_msgs/GetPlan") return "nav_msgs::GetPlan";
+    if (type == "geometry_msgs/PoseStamped") return "geometry_msgs::PoseStamped";
+    if (type == "sensor_msgs/PointCloud2") return "sensor_msgs::PointCloud2";
+    
     return type; // 未识别类型返回原值
 }
 
