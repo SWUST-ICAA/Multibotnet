@@ -203,12 +203,6 @@ bool ServiceManager::callService(const std::string& service_name,
     return true;
 }
 
-// Explicit template instantiations
-template bool ServiceManager::callService<std_srvs::SetBool>(
-    const std::string&, std_srvs::SetBool::Request&, std_srvs::SetBool::Response&);
-template bool ServiceManager::callService<nav_msgs::GetPlan>(
-    const std::string&, nav_msgs::GetPlan::Request&, nav_msgs::GetPlan::Response&);
-
 void ServiceManager::displayConfig(const YAML::Node& config) {
     std::cout << BLUE << "-------provide_services-------" << RESET << std::endl;
     if (config["provide_services"]) {
@@ -256,4 +250,11 @@ std::string ServiceManager::getLocalIP() {
     return local_ip;
 }
 
+// Explicit template instantiations
+template bool ServiceManager::callService<std_srvs::SetBool>(
+    const std::string&, std_srvs::SetBool::Request&, std_srvs::SetBool::Response&);
+template bool ServiceManager::callService<nav_msgs::GetPlan>(
+    const std::string&, nav_msgs::GetPlan::Request&, nav_msgs::GetPlan::Response&);
+
+    
 } // namespace multibotnet
