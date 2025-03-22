@@ -24,6 +24,9 @@ Multibotnet 是一个专为多机器人系统设计的 ROS 包，利用 ZeroMQ �
 - geometry_msgs/Point（点坐标）
 - std_msgs/Float32（浮点数）
 - std_msgs/Int32（整数）
+- geometry_msgs/PoseStamped（带时间戳的位姿）
+- sensor_msgs/PointCloud2（点云）
+- geometry_msgs/Vector3（三维向量）
 - 自定义类型（稍作修改就能支持，超灵活！）
 
 ### 支持的服务类型
@@ -264,6 +267,6 @@ request_services:
 
 Multibotnet 是一个简单又强大的工具，能让多机器人系统高效协作。无论是话题共享还是服务调用，它都能通过灵活的配置和高性能通信满足你的需求。快来试试吧，让你的机器人团队更聪明、更协同！
 
-## 3.1.2版本更新特性
+## 3.2.2版本更新特性
 
-支持了服务通信的功能并且通过了测试
+支持更多的话题类型（nav_msgs/Path 和 sensor_msgs/Range）
