@@ -194,20 +194,51 @@ bool ServiceManager::callService(const std::string& service_name,
 }
 
 void ServiceManager::displayConfig(const YAML::Node& config) {
+    // Create IP mapping table (optional, kept for potential future use)
+    std::map<std::string, std::string> ip_map;
+    if (config["IP"]) {
+        for (const auto& ip : config["IP"]) {
+            ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
+        }
+    }
+
+    // Display provide_services
     std::cout << BLUE << "-------provide_services-------" << RESET << std::endl;
     if (config["provide_services"]) {
         for (const auto& service : config["provide_services"]) {
-            std::string service_name = service["service_name"].as<std::string>();
-            std::string bind_address = service["bind_address"].as<std::string>();
-            std::cout << GREEN << service_name << " (bind at " << bind_address << ")" << RESET << std::endl;
+            try {
+                std::string service_name = service["service_name"].as<std::string>();
+                std::string bind_address_key = service["bind_address"].as<std::string>();
+                int port = service["port"].as<int>();
+
+                // Use the bind_address_key directly without resolving to IP
+                std::string full_address = bind_address_key + ":" + std::to_string(port);
+
+                // Output the service info with a leading slash
+                std::cout << GREEN << "/" << service_name << " (bind at " << full_address << ")" << RESET << std::endl;
+            } catch (const YAML::Exception& e) {
+                std::cerr << "Error in provide_services configuration: " << e.what() << std::endl;
+            }
         }
     }
+
+    // Display request_services
     std::cout << BLUE << "-------request_services-------" << RESET << std::endl;
     if (config["request_services"]) {
         for (const auto& service : config["request_services"]) {
-            std::string service_name = service["service_name"].as<std::string>();
-            std::string connect_address = service["connect_address"].as<std::string>();
-            std::cout << GREEN << service_name << " (connect to " << connect_address << ")" << RESET << std::endl;
+            try {
+                std::string service_name = service["service_name"].as<std::string>();
+                std::string connect_address_key = service["connect_address"].as<std::string>();
+                int port = service["port"].as<int>();
+
+                // Use the connect_address_key directly without resolving to IP
+                std::string full_address = connect_address_key + ":" + std::to_string(port);
+
+                // Output the service info with a leading slash
+                std::cout << GREEN << "/" << service_name << " (connect to " << full_address << ")" << RESET << std::endl;
+            } catch (const YAML::Exception& e) {
+                std::cerr << "Error in request_services configuration: " << e.what() << std::endl;
+            }
         }
     }
 }
