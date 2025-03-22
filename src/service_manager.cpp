@@ -215,7 +215,7 @@ void ServiceManager::displayConfig(const YAML::Node& config) {
                 std::string full_address = bind_address_key + ":" + std::to_string(port);
 
                 // Output the service info with a leading slash
-                std::cout << GREEN << "/" << service_name << " (bind at " << full_address << ")" << RESET << std::endl;
+                std::cout << GREEN << service_name << " (bind at " << full_address << ")" << RESET << std::endl;
             } catch (const YAML::Exception& e) {
                 std::cerr << "Error in provide_services configuration: " << e.what() << std::endl;
             }
@@ -235,7 +235,7 @@ void ServiceManager::displayConfig(const YAML::Node& config) {
                 std::string full_address = connect_address_key + ":" + std::to_string(port);
 
                 // Output the service info with a leading slash
-                std::cout << GREEN << "/" << service_name << " (connect to " << full_address << ")" << RESET << std::endl;
+                std::cout << GREEN << service_name << " (connect to " << full_address << ")" << RESET << std::endl;
             } catch (const YAML::Exception& e) {
                 std::cerr << "Error in request_services configuration: " << e.what() << std::endl;
             }
