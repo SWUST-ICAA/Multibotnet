@@ -150,6 +150,93 @@ void ZmqManager::sendTopic(const std::string& topic,
                         }
                     }
                 });
+        } else if (message_type == "nav_msgs/Odometry") {
+            sub = nh.subscribe<nav_msgs::Odometry>(topic, 1, 
+                [this, &current_socket, index, topic](const nav_msgs::Odometry::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "sensor_msgs/LaserScan") {
+            sub = nh.subscribe<sensor_msgs::LaserScan>(topic, 1, 
+                [this, &current_socket, index, topic](const sensor_msgs::LaserScan::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "sensor_msgs/Image") {
+            sub = nh.subscribe<sensor_msgs::Image>(topic, 1, 
+                [this, &current_socket, index, topic](const sensor_msgs::Image::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "geometry_msgs/Pose") {
+            sub = nh.subscribe<geometry_msgs::Pose>(topic, 1, 
+                [this, &current_socket, index, topic](const geometry_msgs::Pose::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "geometry_msgs/Point") {
+            sub = nh.subscribe<geometry_msgs::Point>(topic, 1, 
+                [this, &current_socket, index, topic](const geometry_msgs::Point::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "std_msgs/Float32") {
+            sub = nh.subscribe<std_msgs::Float32>(topic, 1, 
+                [this, &current_socket, index, topic](const std_msgs::Float32::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else if (message_type == "std_msgs/Int32") {
+            sub = nh.subscribe<std_msgs::Int32>(topic, 1, 
+                [this, &current_socket, index, topic](const std_msgs::Int32::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        } else {
+            ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
+            return;
         }
         subscribers_.push_back(sub);
     } catch (const std::exception& e) {
@@ -177,18 +264,36 @@ void ZmqManager::recvTopic(const std::string& topic,
 
     ros::NodeHandle nh;
     ros::Publisher pub;
+
+    // 为不同消息类型创建发布者
     if (message_type == "sensor_msgs/Imu") {
         pub = nh.advertise<sensor_msgs::Imu>(topic, 1);
     } else if (message_type == "geometry_msgs/Twist") {
         pub = nh.advertise<geometry_msgs::Twist>(topic, 1);
     } else if (message_type == "std_msgs/String") {
         pub = nh.advertise<std_msgs::String>(topic, 1);
+    } else if (message_type == "nav_msgs/Odometry") {
+        pub = nh.advertise<nav_msgs::Odometry>(topic, 1);
+    } else if (message_type == "sensor_msgs/LaserScan") {
+        pub = nh.advertise<sensor_msgs::LaserScan>(topic, 1);
+    } else if (message_type == "sensor_msgs/Image") {
+        pub = nh.advertise<sensor_msgs::Image>(topic, 1);
+    } else if (message_type == "geometry_msgs/Pose") {
+        pub = nh.advertise<geometry_msgs::Pose>(topic, 1);
+    } else if (message_type == "geometry_msgs/Point") {
+        pub = nh.advertise<geometry_msgs::Point>(topic, 1);
+    } else if (message_type == "std_msgs/Float32") {
+        pub = nh.advertise<std_msgs::Float32>(topic, 1);
+    } else if (message_type == "std_msgs/Int32") {
+        pub = nh.advertise<std_msgs::Int32>(topic, 1);
+    } else {
+        ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
+        return;
     }
 
     static std::unordered_set<std::string> logged_topics;
     static std::mutex log_mutex;
 
-    // 修改后的 lambda，去掉 &logged_topics 和 &log_mutex 的捕获
     recv_threads_.emplace_back([this, &current_socket, pub, message_type, topic]() {
         bool first_message = true;
         while (ros::ok()) {
@@ -199,8 +304,8 @@ void ZmqManager::recvTopic(const std::string& topic,
                 zmq::message_t zmq_msg;
                 if (current_socket.recv(zmq_msg)) {
                     if (first_message) {
-                        std::lock_guard<std::mutex> lock(log_mutex);  // 直接使用 log_mutex
-                        if (logged_topics.find(topic) == logged_topics.end()) {  // 直接使用 logged_topics
+                        std::lock_guard<std::mutex> lock(log_mutex);
+                        if (logged_topics.find(topic) == logged_topics.end()) {
                             ROS_INFO("[multibotnet_topic_node] \"%s\" received!", topic.c_str());
                             logged_topics.insert(topic);
                         }
@@ -216,6 +321,34 @@ void ZmqManager::recvTopic(const std::string& topic,
                         pub.publish(msg);
                     } else if (message_type == "std_msgs/String") {
                         std_msgs::String msg = deserializeMsg<std_msgs::String>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "nav_msgs/Odometry") {
+                        nav_msgs::Odometry msg = deserializeMsg<nav_msgs::Odometry>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "sensor_msgs/LaserScan") {
+                        sensor_msgs::LaserScan msg = deserializeMsg<sensor_msgs::LaserScan>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "sensor_msgs/Image") {
+                        sensor_msgs::Image msg = deserializeMsg<sensor_msgs::Image>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "geometry_msgs/Pose") {
+                        geometry_msgs::Pose msg = deserializeMsg<geometry_msgs::Pose>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "geometry_msgs/Point") {
+                        geometry_msgs::Point msg = deserializeMsg<geometry_msgs::Point>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "std_msgs/Float32") {
+                        std_msgs::Float32 msg = deserializeMsg<std_msgs::Float32>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "std_msgs/Int32") {
+                        std_msgs::Int32 msg = deserializeMsg<std_msgs::Int32>(
                             static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
                     }
