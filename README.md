@@ -1,15 +1,15 @@
 # Multibotnet
 
-Multibotnet is a ROS package that uses ZeroMQ to enable efficient distributed communication across multiple robots or computers. It facilitates seamless sharing of ROS topics and services over a network, making it perfect for multi-robot systems.
+Multibotnet 是一个 ROS 包，它使用 ZeroMQ 实现高效的分布式通信，适用于多个机器人或计算机之间的通信。它通过网络无缝共享 ROS 话题和服务，非常适合多机器人系统。
 
-## Features
+## 功能
 
-- **Topic Sharing:**
-  - Send Topics: Publish ROS topics over the network using ZeroMQ.
-  - Receive Topics: Subscribe to topics from other nodes via ZeroMQ.
-- **Service Management:**
-  - Provide and request ROS services using ZeroMQ REP/REQ sockets.
-- **Supported Message Types:**
+- **话题共享**：
+  - 发送话题：使用 ZeroMQ 在网络上发布 ROS 话题。
+  - 接收话题：通过 ZeroMQ 订阅来自其他节点的话题。
+- **服务管理**：
+  - 使用 ZeroMQ REP/REQ 套接字提供和请求 ROS 服务。
+- **支持的消息类型**：
   - sensor_msgs/Imu
   - geometry_msgs/Twist
   - std_msgs/String
@@ -20,76 +20,73 @@ Multibotnet is a ROS package that uses ZeroMQ to enable efficient distributed co
   - geometry_msgs/Point
   - std_msgs/Float32
   - std_msgs/Int32
-  - Custom types (requires code modification)
-- **Supported Service Types:**
+  - 自定义类型（需要修改代码）
+- **支持的服务类型**：
   - std_srvs/SetBool
   - nav_msgs/GetPlan
 
-## Installation
+## 安装
 
-### Dependencies
+### 依赖项
 
 - ZeroMQ
 - yaml-cpp
-- ROS (ensure your ROS environment is set up)
+- ROS（确保您的 ROS 环境已设置）
 
-### Steps
+### 步骤
 
-1. Install dependencies:
+1. 安装依赖项：
    ```bash
    sudo apt-get install libzmq3-dev libyaml-cpp-dev
    ```
 
-2. Clone the repository into your catkin workspace:
+2. 将仓库克隆到您的 catkin 工作空间：
    ```bash
    cd ~/catkin_ws/src
    git clone https://github.com/nanwanuser/multibotnet.git
    ```
 
-3. Build the package:
+3. 构建包：
    ```bash
    cd ~/catkin_ws
    catkin_make
    ```
 
-## Usage
+## 使用方法
 
-1. Edit config/default.yaml to specify topics and services, including IP addresses and ports.
-2. Launch Multibotnet:
+1. 编辑 config/default.yaml 以指定话题和服务，包括 IP 地址和端口。
+2. 启动 Multibotnet：
    ```bash
    roslaunch multibotnet multibotnet.launch
    ```
 
-## Configuration
+## 配置
 
-The config/default.yaml file includes:
+config/default.yaml 文件包括以下内容：
 
-- **IP:** Maps names to IP addresses (e.g., self: '*' for all local IPs).
-- **send_topics:** Topics to publish over the network.
-- **recv_topics:** Topics to subscribe to from the network.
-- **provide_services:** Services to offer via ZeroMQ REP sockets.
-- **request_services:** Services to call via ZeroMQ REQ sockets.
+- **IP**：将名称映射到 IP 地址（例如，self: '*' 表示所有本地 IP）。
+- **send_topics**：要通过网络发布的话题。
+- **recv_topics**：要从网络订阅的话题。
+- **provide_services**：通过 ZeroMQ REP 套接字提供的服务。
+- **request_services**：通过 ZeroMQ REQ 套接字调用的服务。
 
-See the default configuration for examples.
+请参阅默认配置以获取示例。
 
-## Adding Custom Message Types
+## 添加自定义消息类型
 
-To support custom ROS message types, modify the code as follows:
+要支持自定义 ROS 消息类型，请按以下步骤修改代码：
 
-1. **Add Header File:**
-   In include/multibotnet/ros_sub_pub.hpp, include your message header:
+1. 添加头文件：在 include/multibotnet/ros_sub_pub.hpp 中，包含您的消息头文件：
    ```cpp
    #include <your_package/YourMessage.h>
    ```
 
-2. **Update getMsgType:**
-   In the same file, add to the getMsgType function:
+2. 更新 getMsgType：在同一文件中，向 getMsgType 函数添加：
    ```cpp
    if (type == "your_package/YourMessage") return "your_package::YourMessage";
    ```
 
-3. **Handle Sending:**
-   In src/zmq_manager.cpp, update sendTopic:
+3. 处理发送：在 src/zmq_manager.cpp 中，更新 sendTopic：
    ```cpp
    else if (message_type == "your_package/YourMessage") {
        sub = nh.subscribe<your_package::YourMessage>(topic, 1, 
@@ -106,62 +103,60 @@ To support custom ROS message types, modify the code as follows:
    }
    ```
 
-4. **Handle Receiving:**
-   In src/zmq_manager.cpp, update recvTopic:
+4. 处理接收：在 src/zmq_manager.cpp 中，更新 recvTopic：
    ```cpp
    else if (message_type == "your_package/YourMessage") {
        pub = nh.advertise<your_package::YourMessage>(topic, 1);
-       // Inside the thread lambda:
+       // 在线程 lambda 中：
        your_package::YourMessage msg = deserializeMsg<your_package::YourMessage>(
            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
        pub.publish(msg);
    }
    ```
 
-5. **Update Dependencies:**
-   In package.xml, add:
+5. 更新依赖项：在 package.xml 中，添加：
    ```xml
    <depend>your_package</depend>
    ```
-   Ensure your custom package is built and sourced in your workspace.
 
-6. **Recompile:**
+6. 确保您的自定义包已在工作空间中构建并 sourced。
+
+7. 重新编译：
    ```bash
    catkin_make
    ```
 
-## Adding Custom Service Types
+## 添加自定义服务类型
 
-To support custom ROS service types:
+要支持自定义 ROS 服务类型：
 
-1. **Add Header File:**
-   In include/multibotnet/ros_sub_pub.hpp, include your service header:
+1. 添加头文件：在 include/multibotnet/ros_sub_pub.hpp 中，包含您的服务头文件：
    ```cpp
    #include <your_package/YourService.h>
    ```
 
-2. **Update getMsgType:**
-   Add to getMsgType:
+2. 更新 getMsgType：向 getMsgType 添加：
    ```cpp
    if (type == "your_package/YourService") return "your_package::YourService";
    ```
 
-3. **Implement Service Handler:**
-   In src/service_manager.cpp, add a handler function:
+3. 实现服务处理程序：在 src/service_manager.cpp 中，添加一个处理函数：
    ```cpp
    bool ServiceManager::handleYourService(your_package::YourService::Request& req, 
                                         your_package::YourService::Response& res) {
-       // Your logic here
+       // 您的逻辑在此处
        return true;
    }
    ```
-   In ServiceManager::init, register the service:
+
+4. 在 ServiceManager::init 中，注册服务：
    ```cpp
    else if (service_type == "your_package/YourService") {
        service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleYourService, this));
    }
    ```
-   In processRequests, handle the request:
+
+5. 在 processRequests 中，处理请求：
    ```cpp
    else if (req_data.service_type == "your_package/YourService") {
        auto req = deserializeMsg<your_package::YourService::Request>(
@@ -175,32 +170,30 @@ To support custom ROS service types:
    }
    ```
 
-4. **Update callService:**
-   Add a template instantiation in service_manager.cpp:
+6. 更新 callService：在 service_manager.cpp 中添加模板实例化：
    ```cpp
-   template bool ServiceManager::callService<your_package::YourService>(
+   template bool ServiceManager::callService<your_package/YourService>(
        const std::string&, your_package::YourService::Request&, your_package::YourService::Response&);
    ```
 
-5. **Update Dependencies:**
-   Add to package.xml:
+7. 更新依赖项：在 package.xml 中添加：
    ```xml
    <depend>your_package</depend>
    ```
 
-6. **Recompile:**
+8. 重新编译：
    ```bash
    catkin_make
    ```
 
-## Example
+## 示例
 
-### Scenario
+### 场景
 
-- Robot1 (IP: 192.168.1.101) sends /imu and provides /set_bool.
-- Robot2 (IP: 192.168.1.102) receives /imu as /imu_recv and requests /set_bool.
+- Robot1（IP：192.168.1.101）：发送 /imu 并提供 /set_bool 服务。
+- Robot2（IP：192.168.1.102）：接收 /imu 作为 /imu_recv 并请求 /set_bool 服务。
 
-### Robot1 Configuration
+### Robot1 配置
 ```yaml
 IP:
   self: '*'
@@ -220,7 +213,7 @@ provide_services:
   port: 5555
 ```
 
-### Robot2 Configuration
+### Robot2 配置
 ```yaml
 IP:
   self: '*'
@@ -239,4 +232,4 @@ request_services:
   port: 5555
 ```
 
-Launch Multibotnet on both robots to enable topic sharing and service calls.
+在两个机器人上启动 Multibotnet 以启用话题共享和服务调用。
