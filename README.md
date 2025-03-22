@@ -130,16 +130,21 @@ config/default.yaml 是你的“控制中心”，里面有这些关键项：
    ```
 
 4. 接收逻辑
-   在 src/zmq_manager.cpp 的 recvTopic 函数中加一段：
+   在 src/zmq_manager.cpp 的 recvTopic 函数中，首先为新消息类型创建发布者：
    ```cpp
    else if (message_type == "your_package/YourMessage") {
-       pub = nh.advertise<your_package::YourMessage>(topic, 1);
-       // 在接收线程中：
-       your_package::YourMessage msg = deserializeMsg<your_package::YourMessage>(
-           static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
-       pub.publish(msg);
+    pub = nh.advertise<your_package::YourMessage>(topic, 1);
    }
    ```
+   然后，在接收线程中反序列化并发布：
+   ```cpp
+   else if (message_type == "your_package/YourMessage") {
+    your_package::YourMessage msg = deserializeMsg<your_package::YourMessage>(
+        static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+    pub.publish(msg);
+   }
+   ```
+
 
 5. 更新依赖
    在 package.xml 中添加：
