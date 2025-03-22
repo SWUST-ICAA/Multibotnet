@@ -156,7 +156,7 @@ void ServiceManager::processRequests() {
             std_srvs::SetBool::Response res;
 
             // 调用本地 ROS 服务
-            auto it = ros_clients_.find("/set_bool"); 
+            auto it = ros_clients_.find("/set_bool"); // 示例服务名，需根据实际配置调整
             if (it != ros_clients_.end()) {
                 std_srvs::SetBool srv;
                 srv.request = req;
@@ -179,7 +179,7 @@ void ServiceManager::processRequests() {
             nav_msgs::GetPlan::Response res;
 
             // 调用本地 ROS 服务
-            auto it = ros_clients_.find("/get_plan"); 
+            auto it = ros_clients_.find("/get_plan"); // 示例服务名，需根据实际配置调整
             if (it != ros_clients_.end()) {
                 nav_msgs::GetPlan srv;
                 srv.request = req;
