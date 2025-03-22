@@ -21,7 +21,7 @@ public:
 
     void init(const std::string& config_file);
 
-    // 模板函数，用于调用远程服务
+    // 模板函数，用于本地节点调用远程服务
     template<typename ServiceType>
     bool callService(const std::string& service_name, 
                      typename ServiceType::Request& req, 
@@ -33,6 +33,7 @@ private:
     std::vector<ros::ServiceServer> service_servers_; // ROS 服务服务器列表
     std::vector<std::thread> service_threads_;  // 服务线程列表
     std::map<std::string, zmq::socket_t> req_sockets_; // REQ 套接字映射，用于请求服务
+    std::map<std::string, ros::ServiceClient> ros_clients_; // ROS 服务客户端，用于调用本地服务
 
     // 请求队列及其同步机制
     struct ServiceRequest {
@@ -51,10 +52,6 @@ private:
                             const std::string& service_type,
                             const std::string& connect_address, 
                             int port);
-
-    // ROS 服务回调函数
-    bool handleSetBool(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res);
-    bool handleGetPlan(nav_msgs::GetPlan::Request& req, nav_msgs::GetPlan::Response& res);
 
     // 处理请求队列的函数
     void processRequests();

@@ -58,15 +58,8 @@ void ServiceManager::init(const std::string& config_file) {
                 continue;
             }
 
-            // 注册 ROS 服务
-            if (service_type == "std_srvs/SetBool") {
-                service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleSetBool, this));
-            } else if (service_type == "nav_msgs/GetPlan") {
-                service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleGetPlan, this));
-            } else {
-                ROS_ERROR("Unsupported service type: %s", service_type.c_str());
-                continue;
-            }
+            // 创建 ROS 服务客户端，用于调用本地服务
+            ros_clients_[service_name] = nh.serviceClient<std_srvs::SetBool>(service_name); // 这里仅示例，后续根据类型扩展
 
             startProvideService(service_name, service_type, bind_address, port);
         }
@@ -161,7 +154,21 @@ void ServiceManager::processRequests() {
             auto req = deserializeMsg<std_srvs::SetBool::Request>(
                 static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
             std_srvs::SetBool::Response res;
-            handleSetBool(req, res);
+
+            // 调用本地 ROS 服务
+            auto it = ros_clients_.find("/set_bool"); 
+            if (it != ros_clients_.end()) {
+                std_srvs::SetBool srv;
+                srv.request = req;
+                if (it->second.call(srv)) {
+                    res = srv.response;
+                } else {
+                    ROS_ERROR("Failed to call local ROS service /set_bool");
+                    res.success = false;
+                    res.message = "Service call failed";
+                }
+            }
+
             auto buffer = serializeMsg(res);
             zmq::message_t reply(buffer.size());
             memcpy(reply.data(), buffer.data(), buffer.size());
@@ -170,7 +177,19 @@ void ServiceManager::processRequests() {
             auto req = deserializeMsg<nav_msgs::GetPlan::Request>(
                 static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
             nav_msgs::GetPlan::Response res;
-            handleGetPlan(req, res);
+
+            // 调用本地 ROS 服务
+            auto it = ros_clients_.find("/get_plan"); 
+            if (it != ros_clients_.end()) {
+                nav_msgs::GetPlan srv;
+                srv.request = req;
+                if (it->second.call(srv)) {
+                    res = srv.response;
+                } else {
+                    ROS_ERROR("Failed to call local ROS service /get_plan");
+                }
+            }
+
             auto buffer = serializeMsg(res);
             zmq::message_t reply(buffer.size());
             memcpy(reply.data(), buffer.data(), buffer.size());
@@ -215,18 +234,6 @@ template bool ServiceManager::callService<std_srvs::SetBool>(
     const std::string&, std_srvs::SetBool::Request&, std_srvs::SetBool::Response&);
 template bool ServiceManager::callService<nav_msgs::GetPlan>(
     const std::string&, nav_msgs::GetPlan::Request&, nav_msgs::GetPlan::Response&);
-
-bool ServiceManager::handleSetBool(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res) {
-    res.success = true;
-    res.message = "Service called with data: " + std::to_string(req.data);
-    return true;
-}
-
-bool ServiceManager::handleGetPlan(nav_msgs::GetPlan::Request& req, nav_msgs::GetPlan::Response& res) {
-    res.plan.header.stamp = ros::Time::now();
-    res.plan.header.frame_id = "map";
-    return true;
-}
 
 void ServiceManager::displayConfig(const YAML::Node& config) {
     std::cout << BLUE << "-------provide_services-------" << RESET << std::endl;
