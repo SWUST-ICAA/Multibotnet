@@ -34,13 +34,10 @@ void ServiceManager::init(const std::string& config_file) {
         ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
     }
 
-    ros::NodeHandle nh;
-
-    // 处理 provide_services
+    // Handle provide_services
     if (config["provide_services"]) {
         size_t num_services = config["provide_services"].size();
         rep_sockets_.reserve(num_services);
-        service_servers_.reserve(num_services);
         service_threads_.reserve(num_services);
 
         for (const auto& service : config["provide_services"]) {
@@ -58,14 +55,18 @@ void ServiceManager::init(const std::string& config_file) {
                 continue;
             }
 
-            // 创建 ROS 服务客户端，用于调用本地服务
-            ros_clients_[service_name] = nh.serviceClient<std_srvs::SetBool>(service_name); // 这里仅示例，后续根据类型扩展
-
             startProvideService(service_name, service_type, bind_address, port);
+            auto& current_socket = rep_sockets_.back();
+            auto handler = createHandler(service_type, service_name);
+            if (handler) {
+                socket_to_handler_[&current_socket] = handler;
+            } else {
+                ROS_ERROR("Failed to create handler for service %s with type %s", service_name.c_str(), service_type.c_str());
+            }
         }
     }
 
-    // 处理 request_services
+    // Handle request_services
     if (config["request_services"]) {
         for (const auto& service : config["request_services"]) {
             std::string service_name = service["service_name"].as<std::string>();
@@ -86,18 +87,29 @@ void ServiceManager::init(const std::string& config_file) {
         }
     }
 
-    // 启动请求处理线程
+    // Start request processing thread
     service_threads_.emplace_back([this]() {
         while (ros::ok()) {
             processRequests();
-            ros::Duration(0.01).sleep(); // 10ms 间隔，避免占用过多 CPU
+            ros::Duration(0.01).sleep(); // 10ms interval to avoid high CPU usage
         }
     });
 }
 
-void ServiceManager::startProvideService(const std::string& service_name, 
+std::shared_ptr<ServiceHandler> ServiceManager::createHandler(const std::string& service_type, const std::string& service_name) {
+    if (service_type == "std_srvs/SetBool") {
+        return std::make_shared<SpecificServiceHandler<std_srvs::SetBool>>(service_name);
+    } else if (service_type == "nav_msgs/GetPlan") {
+        return std::make_shared<SpecificServiceHandler<nav_msgs::GetPlan>>(service_name);
+    } else {
+        ROS_ERROR("Unsupported service type: %s", service_type.c_str());
+        return nullptr;
+    }
+}
+
+void ServiceManager::startProvideService(const std::string& service_name,
                                         const std::string& service_type,
-                                        const std::string& bind_address, 
+                                        const std::string& bind_address,
                                         int port) {
     zmq::socket_t rep_socket(context_, ZMQ_REP);
     std::string address = "tcp://" + bind_address + ":" + std::to_string(port);
@@ -111,25 +123,25 @@ void ServiceManager::startProvideService(const std::string& service_name,
     rep_sockets_.emplace_back(std::move(rep_socket));
     auto& current_socket = rep_sockets_.back();
 
-    service_threads_.emplace_back([this, &current_socket, service_type, service_name]() {
+    service_threads_.emplace_back([this, &current_socket]() {
         while (ros::ok()) {
             zmq::pollitem_t items[] = {{static_cast<void*>(current_socket), 0, ZMQ_POLLIN, 0}};
-            zmq::poll(items, 1, 100); // 100ms 超时
+            zmq::poll(items, 1, 100); // 100ms timeout
             if (!ros::ok()) break;
             if (items[0].revents & ZMQ_POLLIN) {
                 zmq::message_t request;
                 if (current_socket.recv(request)) {
                     std::lock_guard<std::mutex> lock(queue_mutex_);
-                    request_queue_.push({service_type, std::move(request), &current_socket});
+                    request_queue_.push({std::move(request), &current_socket});
                 }
             }
         }
     });
 }
 
-void ServiceManager::startRequestService(const std::string& service_name, 
+void ServiceManager::startRequestService(const std::string& service_name,
                                         const std::string& service_type,
-                                        const std::string& connect_address, 
+                                        const std::string& connect_address,
                                         int port) {
     zmq::socket_t req_socket(context_, ZMQ_REQ);
     std::string address = "tcp://" + connect_address + ":" + std::to_string(port);
@@ -149,58 +161,20 @@ void ServiceManager::processRequests() {
         request_queue_.pop();
 
         zmq::socket_t* rep_socket = req_data.rep_socket;
-
-        if (req_data.service_type == "std_srvs/SetBool") {
-            auto req = deserializeMsg<std_srvs::SetBool::Request>(
-                static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
-            std_srvs::SetBool::Response res;
-
-            // 调用本地 ROS 服务
-            auto it = ros_clients_.find("/set_bool"); // 示例服务名，需根据实际配置调整
-            if (it != ros_clients_.end()) {
-                std_srvs::SetBool srv;
-                srv.request = req;
-                if (it->second.call(srv)) {
-                    res = srv.response;
-                } else {
-                    ROS_ERROR("Failed to call local ROS service /set_bool");
-                    res.success = false;
-                    res.message = "Service call failed";
-                }
-            }
-
-            auto buffer = serializeMsg(res);
-            zmq::message_t reply(buffer.size());
-            memcpy(reply.data(), buffer.data(), buffer.size());
-            rep_socket->send(reply, zmq::send_flags::none);
-        } else if (req_data.service_type == "nav_msgs/GetPlan") {
-            auto req = deserializeMsg<nav_msgs::GetPlan::Request>(
-                static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
-            nav_msgs::GetPlan::Response res;
-
-            // 调用本地 ROS 服务
-            auto it = ros_clients_.find("/get_plan"); // 示例服务名，需根据实际配置调整
-            if (it != ros_clients_.end()) {
-                nav_msgs::GetPlan srv;
-                srv.request = req;
-                if (it->second.call(srv)) {
-                    res = srv.response;
-                } else {
-                    ROS_ERROR("Failed to call local ROS service /get_plan");
-                }
-            }
-
-            auto buffer = serializeMsg(res);
-            zmq::message_t reply(buffer.size());
-            memcpy(reply.data(), buffer.data(), buffer.size());
+        auto it = socket_to_handler_.find(rep_socket);
+        if (it != socket_to_handler_.end()) {
+            it->second->handleRequest(req_data.request, *rep_socket);
+        } else {
+            ROS_ERROR("No handler found for socket");
+            zmq::message_t reply(0);
             rep_socket->send(reply, zmq::send_flags::none);
         }
     }
 }
 
 template<typename ServiceType>
-bool ServiceManager::callService(const std::string& service_name, 
-                                typename ServiceType::Request& req, 
+bool ServiceManager::callService(const std::string& service_name,
+                                typename ServiceType::Request& req,
                                 typename ServiceType::Response& res) {
     auto it = req_sockets_.find(service_name);
     if (it == req_sockets_.end()) {
@@ -229,7 +203,7 @@ bool ServiceManager::callService(const std::string& service_name,
     return true;
 }
 
-// 显式实例化模板函数
+// Explicit template instantiations
 template bool ServiceManager::callService<std_srvs::SetBool>(
     const std::string&, std_srvs::SetBool::Request&, std_srvs::SetBool::Response&);
 template bool ServiceManager::callService<nav_msgs::GetPlan>(
