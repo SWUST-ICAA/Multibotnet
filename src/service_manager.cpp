@@ -96,16 +96,6 @@ void ServiceManager::init(const std::string& config_file) {
     });
 }
 
-std::shared_ptr<ServiceHandler> ServiceManager::createHandler(const std::string& service_type, const std::string& service_name) {
-    if (service_type == "std_srvs/SetBool") {
-        return std::make_shared<SpecificServiceHandler<std_srvs::SetBool>>(service_name);
-    } else if (service_type == "nav_msgs/GetPlan") {
-        return std::make_shared<SpecificServiceHandler<nav_msgs::GetPlan>>(service_name);
-    } else {
-        ROS_ERROR("Unsupported service type: %s", service_type.c_str());
-        return nullptr;
-    }
-}
 
 void ServiceManager::startProvideService(const std::string& service_name,
                                         const std::string& service_type,
@@ -248,6 +238,18 @@ std::string ServiceManager::getLocalIP() {
         ROS_WARN("No non-loopback IP found, using 127.0.0.1");
     }
     return local_ip;
+}
+
+
+std::shared_ptr<ServiceHandler> ServiceManager::createHandler(const std::string& service_type, const std::string& service_name) {
+    if (service_type == "std_srvs/SetBool") {
+        return std::make_shared<SpecificServiceHandler<std_srvs::SetBool>>(service_name);
+    } else if (service_type == "nav_msgs/GetPlan") {
+        return std::make_shared<SpecificServiceHandler<nav_msgs::GetPlan>>(service_name);
+    } else {
+        ROS_ERROR("Unsupported service type: %s", service_type.c_str());
+        return nullptr;
+    }
 }
 
 // Explicit template instantiations

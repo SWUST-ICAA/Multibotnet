@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
         ROS_ERROR("The parameter configuration is incorrect. Please ensure that the parameter is correctly set in the launch file");
         return 1;
     }
-    ros::Duration(1).sleep();//延时启动服务通信
+    ros::Duration(0.2).sleep();//延时启动服务通信
     multibotnet::ServiceManager service_manager;
     service_manager.init(config_file);
 

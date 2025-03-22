@@ -378,7 +378,7 @@ void ZmqManager::recvTopic(const std::string& topic,
                     if (first_message) {
                         std::lock_guard<std::mutex> lock(log_mutex);
                         if (logged_topics.find(topic) == logged_topics.end()) {
-                            ROS_INFO("[multibotnet_topic_node] \"%s\" received!", topic.c_str());
+                            ROS_INFO("--->[multibotnet_topic_node] \"%s\" received!<---", topic.c_str());
                             logged_topics.insert(topic);
                         }
                         first_message = false;
@@ -489,7 +489,7 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
 
             // 显示话题信息
             std::cout << GREEN << topic_name << "  " << max_frequency 
-                      << "Hz(max_frequency)  bind: " << display_address << RESET << std::endl;
+                      << "Hz(max_frequency)  bind_port: " << display_address << RESET << std::endl;
         }
     }
 

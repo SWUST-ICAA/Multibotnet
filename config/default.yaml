@@ -14,7 +14,6 @@ IP:
   robot2: 192.168.1.102
   robot3: 192.168.1.103
   test_local: 127.0.0.1
-  jinda: 192.168.101.38
 # 发送话题配置
 send_topics:
 - topic: /imu
@@ -72,9 +71,9 @@ provide_services:
 request_services:
 - service_name: /remote_set_bool
   service_type: std_srvs/SetBool
-  connect_address: jinda
+  connect_address: robot1
   port: 5555
 - service_name: /remote_get_plan
   service_type: nav_msgs/GetPlan
-  connect_address: jinda
+  connect_address: robot1
   port: 5556
