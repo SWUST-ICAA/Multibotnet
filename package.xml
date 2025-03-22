@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>multibotnet</name>
-  <version>3.2.2</version>
+  <version>3.2.3</version>
   <description>A ROS package for distributed communication using ZeroMQ</description>
   <maintainer email="nanwan2004@126.com">Your Name</maintainer>
   <license>Apache-2.0</license>
