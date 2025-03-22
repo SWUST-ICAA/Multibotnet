@@ -31,11 +31,9 @@ inline std::string getMsgType(const std::string& type) {
     if (type == "geometry_msgs/Point") return "geometry_msgs::Point";
     if (type == "std_msgs/Float32") return "std_msgs::Float32";
     if (type == "std_msgs/Int32") return "std_msgs::Int32";
-    if (type == "std_srvs/SetBool") return "std_srvs::SetBool";
-    if (type == "nav_msgs/GetPlan") return "nav_msgs::GetPlan";
     if (type == "geometry_msgs/PoseStamped") return "geometry_msgs::PoseStamped";
     if (type == "sensor_msgs/PointCloud2") return "sensor_msgs::PointCloud2";
-    
+
     return type; // 未识别类型返回原值
 }
 
