@@ -455,6 +455,7 @@ void ZmqManager::recvTopic(const std::string& topic,
 }
 
 void ZmqManager::displayConfig(const YAML::Node& config) {
+    // 显示 IP 部分
     std::cout << BLUE << "-------------IP------------" << RESET << std::endl;
     for (const auto& ip : config["IP"]) {
         std::cout << YELLOW << ip.first.as<std::string>() << " : " << ip.second.as<std::string>() << RESET << std::endl;
@@ -466,39 +467,55 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
         ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
     }
 
+    // 显示 send topics 部分
     std::cout << BLUE << "--------send topics--------" << RESET << std::endl;
     if (config["send_topics"]) {
         for (const auto& topic : config["send_topics"]) {
-            std::string topic_name = topic["topic"].as<std::string>();
-            int max_frequency = topic["max_frequency"].as<int>();
-            std::string bind_address_key = topic["bind_address"].as<std::string>();
-            int port = topic["port"].as<int>();
+            try {
+                std::string topic_name = topic["topic"].as<std::string>();
+                int max_frequency = topic["max_frequency"].as<int>();
+                std::string bind_address_key = topic["bind_address"].as<std::string>();
+                int port = topic["port"].as<int>();
 
-            // 确定显示的 IP 地址
-            std::string display_ip;
-            if (bind_address_key == "self") {
-                display_ip = this->getLocalIP(); // 当为 "self" 时，使用本机 IP
-            } else if (ip_map.find(bind_address_key) != ip_map.end()) {
-                display_ip = ip_map[bind_address_key]; // 从 IP 映射中查找
-            } else {
-                display_ip = "Invalid: " + bind_address_key; // 无效地址
+                // 确定显示的 IP 地址
+                std::string display_ip;
+                if (bind_address_key == "self") {
+                    display_ip = this->getLocalIP(); // 当为 "self" 时，使用本机 IP
+                } else if (ip_map.find(bind_address_key) != ip_map.end()) {
+                    display_ip = ip_map[bind_address_key]; // 从 IP 映射中查找
+                } else {
+                    display_ip = "Invalid: " + bind_address_key; // 无效地址
+                }
+
+                // 组合 IP 和端口
+                std::string display_address = display_ip + ":" + std::to_string(port);
+
+                // 显示话题信息
+                std::cout << GREEN << topic_name << "  " << max_frequency 
+                          << "Hz(max_frequency)  bind_port: " << display_address << RESET << std::endl;
+            } catch (const YAML::Exception& e) {
+                std::cerr << "Error in send_topics configuration: " << e.what() << std::endl;
             }
-
-            // 组合 IP 和端口
-            std::string display_address = display_ip + ":" + std::to_string(port);
-
-            // 显示话题信息
-            std::cout << GREEN << topic_name << "  " << max_frequency 
-                      << "Hz(max_frequency)  bind_port: " << display_address << RESET << std::endl;
         }
     }
 
+    // 显示 receive topics 部分
     std::cout << BLUE << "-------receive topics------" << RESET << std::endl;
     if (config["recv_topics"]) {
         for (const auto& topic : config["recv_topics"]) {
-            std::string topic_name = topic["topic"].as<std::string>();
-            std::string connect_address = topic["connect_address"].as<std::string>();
-            std::cout << GREEN << topic_name << "  (IP from " << connect_address << ")" << RESET << std::endl;
+            try {
+                std::string topic_name = topic["topic"].as<std::string>();
+                std::string connect_address_key = topic["connect_address"].as<std::string>();
+                int port = topic["port"].as<int>();  // 获取端口号
+
+                // 使用 connect_address_key 直接拼接地址和端口
+                std::string display_address = connect_address_key + ":" + std::to_string(port);
+
+                // 显示话题信息
+                std::cout << GREEN << topic_name << "  (IP from " << display_address << ")" << RESET << std::endl;
+            } catch (const YAML::Exception& e) {
+                std::cerr << "Error in recv_topics configuration: " << e.what() << std::endl;
+            }
         }
     }
 }
