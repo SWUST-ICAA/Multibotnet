@@ -61,6 +61,6 @@ T deserializeMsg(const uint8_t* data, size_t size) {
     return msg;
 }
 
-} // namespace multibotnet
+} // namespace multibotnet 
 
 #endif // ROS_SUB_PUB_HPP
