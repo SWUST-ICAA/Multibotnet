@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     std::string config_file;
     if (!nh.getParam("config_file", config_file)) {
-        ROS_ERROR("参数配置问题，请确保在 launch 文件中正确设置该参数");
+        ROS_ERROR("The parameter configuration is incorrect. Please ensure that the parameter is correctly set in the launch file");
         return 1;
     }
     ros::Duration(1).sleep();//延时启动服务通信

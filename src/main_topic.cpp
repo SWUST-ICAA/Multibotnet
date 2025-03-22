@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     std::string config_file;
     if (!nh.getParam("config_file", config_file)) {
         // 如果获取失败，输出错误信息并退出
-        ROS_ERROR("参数配置问题，请确保在 launch 文件中正确设置该参数");
+        ROS_ERROR("The parameter configuration is incorrect. Please ensure that the parameter is correctly set in the launch file");
         return 1;
     }
     
