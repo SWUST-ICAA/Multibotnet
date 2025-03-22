@@ -158,68 +158,62 @@ config/default.yaml 是你的“控制中心”，里面有这些关键项：
    ```
 
 ### 添加自定义服务类型
+
 1. 引入头文件
-   在 include/multibotnet/ros_sub_pub.hpp 中加一行：
+   在 include/multibotnet/ros_sub_pub.hpp 中添加对你的服务类型头文件的引用，以便编译器识别该类型：
    ```cpp
    #include <your_package/YourService.h>
    ```
 
-2. 映射类型
-   在 getMsgType 函数中添加：
-   ```cpp
-   if (type == "your_package/YourService") return "your_package::YourService";
-   ```
-
-3. 实现服务逻辑
-   在 src/service_manager.cpp 中加一个处理函数：
-   ```cpp
-   bool ServiceManager::handleYourService(your_package::YourService::Request& req, 
-                                        your_package::YourService::Response& res) {
-       // 你的服务逻辑
-       return true;
-   }
-   ```
-
-4. 注册服务
-   在 ServiceManager::init 中添加：
+2. 在 ServiceManager 中支持新服务类型
+   在 src/service_manager.cpp 的 createHandler 函数中，为你的服务类型添加一个条件分支，创建对应的 SpecificServiceHandler：
    ```cpp
    else if (service_type == "your_package/YourService") {
-       service_servers_.push_back(nh.advertiseService(service_name, &ServiceManager::handleYourService, this));
+      return std::make_shared<SpecificServiceHandler<your_package::YourService>>(service_name);
    }
    ```
 
-5. 处理请求
-   在 processRequests 中添加：
-   ```cpp
-   else if (req_data.service_type == "your_package/YourService") {
-       auto req = deserializeMsg<your_package::YourService::Request>(
-           static_cast<uint8_t*>(req_data.request.data()), req_data.request.size());
-       your_package::YourService::Response res;
-       handleYourService(req, res);
-       auto buffer = serializeMsg(res);
-       zmq::message_t reply(buffer.size());
-       memcpy(reply.data(), buffer.data(), buffer.size());
-       rep_socket->send(reply, zmq::send_flags::none);
-   }
-   ```
+    这步是核心，ServiceManager 通过 createHandler 为提供的服务创建处理程序，绑定到 REP 套接字。
+    SpecificServiceHandler 会自动调用本地 ROS 服务并处理序列化/反序列化。
 
-6. 更新调用
-   在 service_manager.cpp 中添加模板实例化：
+3. 更新模板实例化（可选）
+   如果你需要在代码中通过 callService 调用该服务，需要在 src/service_manager.cpp 文件末尾添加模板实例化：
    ```cpp
    template bool ServiceManager::callService<your_package/YourService>(
-       const std::string&, your_package::YourService::Request&, your_package::YourService::Response&);
+      const std::string&, your_package/YourService::Request&, your_package/YourService::Response&);
    ```
+   如果你只提供服务（provide_services），这步可以跳过；但如果涉及请求服务（request_services），则必须添加。
 
-7. 更新依赖
-   在 package.xml 中添加：
+
+4. 更新依赖
+   在 package.xml 中添加对你服务包的依赖，确保项目能找到服务定义：
    ```xml
    <depend>your_package</depend>
    ```
-
-8. 重新编译
+5. 重新编译
+   在工作空间根目录下运行以下命令以应用更改：
    ```bash
    catkin_make
    ```
+6. 配置 YAML 文件
+   在 config/default.yaml 中添加你的服务配置，例如：
+
+    提供服务：
+    ```yaml
+    provide_services:
+    - service_name: /your_service
+      service_type: your_package/YourService
+      bind_address: self
+      port: 5560
+    ```
+    请求服务：
+    ```yaml
+    request_services:
+    - service_name: /remote_your_service
+      service_type: your_package/YourService
+      connect_address: robot1
+      port: 5560
+    ```
 
 ## 应用示例
 ### 场景描述
