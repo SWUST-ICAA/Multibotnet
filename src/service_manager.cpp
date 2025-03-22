@@ -173,6 +173,7 @@ bool ServiceManager::callService(const std::string& service_name,
     }
     zmq::socket_t& req_socket = it->second;
 
+    // 序列化并发送请求
     auto buffer = serializeMsg(req);
     zmq::message_t zmq_req(buffer.size());
     memcpy(zmq_req.data(), buffer.data(), buffer.size());
@@ -182,15 +183,28 @@ bool ServiceManager::callService(const std::string& service_name,
         return false;
     }
 
+    // 接收响应
     zmq::message_t zmq_res;
     if (!req_socket.recv(zmq_res)) {
         ROS_ERROR("Failed to receive response for service %s", service_name.c_str());
         return false;
     }
 
-    res = deserializeMsg<typename ServiceType::Response>(
-        static_cast<uint8_t*>(zmq_res.data()), zmq_res.size());
-    return true;
+    // 检查响应是否为空
+    if (zmq_res.size() == 0) {
+        ROS_ERROR("Received empty response for service %s, indicating service call failed", service_name.c_str());
+        return false;
+    }
+
+    // 尝试反序列化，并捕获异常
+    try {
+        res = deserializeMsg<typename ServiceType::Response>(
+            static_cast<uint8_t*>(zmq_res.data()), zmq_res.size());
+        return true;
+    } catch (const ros::serialization::StreamOverrunException& e) {
+        ROS_ERROR("Failed to deserialize response for service %s: %s", service_name.c_str(), e.what());
+        return false;
+    }
 }
 
 void ServiceManager::displayConfig(const YAML::Node& config) {
