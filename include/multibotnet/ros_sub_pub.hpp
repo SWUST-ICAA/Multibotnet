@@ -16,6 +16,9 @@
 #include <nav_msgs/GetPlan.h>   
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <geometry_msgs/Vector3.h>
+#include <nav_msgs/Path.h>       
+#include <sensor_msgs/Range.h>   
 
 namespace multibotnet {
 
@@ -33,7 +36,9 @@ inline std::string getMsgType(const std::string& type) {
     if (type == "std_msgs/Int32") return "std_msgs::Int32";
     if (type == "geometry_msgs/PoseStamped") return "geometry_msgs::PoseStamped";
     if (type == "sensor_msgs/PointCloud2") return "sensor_msgs::PointCloud2";
-
+    if (type == "geometry_msgs/Vector3") return "geometry_msgs::Vector3";
+    if (type == "nav_msgs/Path") return "nav_msgs::Path";             
+    if (type == "sensor_msgs/Range") return "sensor_msgs::Range";     
     return type; // 未识别类型返回原值
 }
 

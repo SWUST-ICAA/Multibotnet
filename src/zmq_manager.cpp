@@ -259,6 +259,43 @@ void ZmqManager::sendTopic(const std::string& topic,
                         }
                     }
                 });
+        }else if (message_type == "geometry_msgs/Vector3") {
+            sub = nh.subscribe<geometry_msgs::Vector3>(topic, 1, 
+                [this, &current_socket, index, topic](const geometry_msgs::Vector3::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        }else if (message_type == "nav_msgs/Path") {
+            sub = nh.subscribe<nav_msgs::Path>(topic, 1, 
+                [this, &current_socket, index, topic](const nav_msgs::Path::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
+        }
+        else if (message_type == "sensor_msgs/Range") {
+            sub = nh.subscribe<sensor_msgs::Range>(topic, 1, 
+                [this, &current_socket, index, topic](const sensor_msgs::Range::ConstPtr& msg) {
+                    if (send_freq_control(index)) {
+                        auto buffer = serializeMsg(*msg);
+                        zmq::message_t zmq_msg(buffer.size());
+                        memcpy(zmq_msg.data(), buffer.data(), buffer.size());
+                        if (!current_socket.send(zmq_msg, zmq::send_flags::none)) {
+                            ROS_ERROR("Failed to send message on topic %s", topic.c_str());
+                        }
+                    }
+                });
         }else {
             ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
             return;
@@ -315,6 +352,12 @@ void ZmqManager::recvTopic(const std::string& topic,
         pub = nh.advertise<geometry_msgs::PoseStamped>(topic, 1);
     } else if (message_type == "sensor_msgs/PointCloud2") {
         pub = nh.advertise<sensor_msgs::PointCloud2>(topic, 1);
+    } else if (message_type == "geometry_msgs/Vector3") {
+        pub = nh.advertise<geometry_msgs::Vector3>(topic, 1);
+    } else if (message_type == "nav_msgs/Path") {
+        pub = nh.advertise<nav_msgs::Path>(topic, 1);
+    } else if (message_type == "sensor_msgs/Range") {
+        pub = nh.advertise<sensor_msgs::Range>(topic, 1);
     } else {
         ROS_ERROR("Unsupported message type '%s' for topic %s", message_type.c_str(), topic.c_str());
         return;
@@ -386,6 +429,19 @@ void ZmqManager::recvTopic(const std::string& topic,
                         pub.publish(msg);
                     } else if (message_type == "sensor_msgs/PointCloud2") {
                         sensor_msgs::PointCloud2 msg = deserializeMsg<sensor_msgs::PointCloud2>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "geometry_msgs/Vector3") {
+                        geometry_msgs::Vector3 msg = deserializeMsg<geometry_msgs::Vector3>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    } else if (message_type == "nav_msgs/Path") {
+                        nav_msgs::Path msg = deserializeMsg<nav_msgs::Path>(
+                            static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
+                        pub.publish(msg);
+                    }
+                      else if (message_type == "sensor_msgs/Range") {
+                        sensor_msgs::Range msg = deserializeMsg<sensor_msgs::Range>(
                             static_cast<uint8_t*>(zmq_msg.data()), zmq_msg.size());
                         pub.publish(msg);
                     } else {
