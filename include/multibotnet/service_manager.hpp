@@ -99,6 +99,6 @@ private:
     std::string getLocalIP();
 };
 
-} // namespace multibotnet
+} // namespace multibotnet 
 
 #endif // SERVICE_MANAGER_HPP
