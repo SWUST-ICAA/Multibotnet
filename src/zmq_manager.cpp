@@ -231,12 +231,36 @@ void ZmqManager::displayConfig(const YAML::Node& config) {
         std::cout << YELLOW << ip.first.as<std::string>() << " : " << ip.second.as<std::string>() << RESET << std::endl;
     }
 
+    // 创建 IP 映射表
+    std::map<std::string, std::string> ip_map;
+    for (const auto& ip : config["IP"]) {
+        ip_map[ip.first.as<std::string>()] = ip.second.as<std::string>();
+    }
+
     std::cout << BLUE << "--------send topics--------" << RESET << std::endl;
     if (config["send_topics"]) {
         for (const auto& topic : config["send_topics"]) {
             std::string topic_name = topic["topic"].as<std::string>();
             int max_frequency = topic["max_frequency"].as<int>();
-            std::cout << GREEN << topic_name << "  " << max_frequency << "Hz(max_frequency)" << RESET << std::endl;
+            std::string bind_address_key = topic["bind_address"].as<std::string>();
+            int port = topic["port"].as<int>();
+
+            // 确定显示的 IP 地址
+            std::string display_ip;
+            if (bind_address_key == "self") {
+                display_ip = this->getLocalIP(); // 当为 "self" 时，使用本机 IP
+            } else if (ip_map.find(bind_address_key) != ip_map.end()) {
+                display_ip = ip_map[bind_address_key]; // 从 IP 映射中查找
+            } else {
+                display_ip = "Invalid: " + bind_address_key; // 无效地址
+            }
+
+            // 组合 IP 和端口
+            std::string display_address = display_ip + ":" + std::to_string(port);
+
+            // 显示话题信息
+            std::cout << GREEN << topic_name << "  " << max_frequency 
+                      << "Hz(max_frequency)  bind: " << display_address << RESET << std::endl;
         }
     }
 
