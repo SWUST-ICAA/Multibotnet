@@ -21,12 +21,12 @@ namespace multibotnet {
 class ZmqTransport {
 public:
     enum class SocketType {
-        PUB,
-        SUB,
-        REQ,
-        REP,
-        DEALER,
-        ROUTER
+        PUB = 1,      // ZMQ_PUB
+        SUB = 2,      // ZMQ_SUB
+        REQ = 3,      // ZMQ_REQ
+        REP = 4,      // ZMQ_REP
+        DEALER = 5,   // ZMQ_DEALER
+        ROUTER = 6    // ZMQ_ROUTER
     };
     
     /**

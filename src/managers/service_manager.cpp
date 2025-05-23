@@ -203,6 +203,14 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
         info->transport = std::make_shared<ZmqTransport>(
             context_, ZmqTransport::SocketType::REP);
         
+        // 设置套接字选项
+        int linger = 0;
+        info->transport->setOption(ZMQ_LINGER, linger);
+        
+        // 设置接收超时
+        int rcv_timeout = 100;  // 100ms
+        info->transport->setOption(ZMQ_RCVTIMEO, rcv_timeout);
+        
         // 绑定地址
         std::string bind_address = "tcp://" + info->config.address + ":" + 
                                   std::to_string(config.port);
@@ -338,8 +346,14 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
         info->connection_pool = std::make_shared<ConnectionPool>(
             context_, ZmqTransport::SocketType::REQ, pool_config);
         
+        // 特殊处理localhost
+        std::string connect_ip = info->config.address;
+        if (connect_ip == "127.0.0.1" || connect_ip == "localhost") {
+            connect_ip = "127.0.0.1";
+        }
+        
         // 预创建连接
-        std::string connect_address = "tcp://" + info->config.address + ":" + 
+        std::string connect_address = "tcp://" + connect_ip + ":" + 
                                      std::to_string(config.port);
         info->connection_pool->preCreateConnections(connect_address, 1);
         
@@ -365,7 +379,13 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
                                     std::vector<uint8_t>& response,
                                     int retries,
                                     int timeout_ms) {
-    std::string connect_address = "tcp://" + info->config.address + ":" + 
+    // 特殊处理localhost
+    std::string connect_ip = info->config.address;
+    if (connect_ip == "127.0.0.1" || connect_ip == "localhost") {
+        connect_ip = "127.0.0.1";
+    }
+    
+    std::string connect_address = "tcp://" + connect_ip + ":" + 
                                  std::to_string(info->config.port);
     
     for (int attempt = 0; attempt <= retries; attempt++) {

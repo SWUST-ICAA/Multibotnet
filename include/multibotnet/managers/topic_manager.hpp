@@ -75,7 +75,7 @@ private:
         std::thread recv_thread;
         std::atomic<bool> active;
         bool first_message;
-        MessageFactory::ShapeShifterPtr template_msg;
+        bool has_advertised;  // 添加这个标志，表示是否已经创建了发布者
     };
     
     // 成员变量
