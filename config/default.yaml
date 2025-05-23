@@ -8,10 +8,10 @@
 IP:
   self: '*'                    # '*' 表示绑定所有本机IP
   localhost: '127.0.0.1'       # 本地回环
-  robot1: '192.168.1.101'      # 机器人1
-  robot2: '192.168.1.102'      # 机器人2
-  robot3: '192.168.1.103'      # 机器人3
-  server: '192.168.1.100'      # 中央服务器
+  robot1: '192.168.101.101'      # 机器人1
+  robot2: '192.168.101.102'      # 机器人2
+  robot3: '192.168.101.103'      # 机器人3
+  server: '192.168.101.100'      # 中央服务器
 
 # 发送话题配置
 # 支持任意ROS消息类型，无需修改代码
@@ -66,12 +66,12 @@ recv_topics:
   # 接收其他机器人的IMU数据
   - topic: /robot1/imu
     message_type: sensor_msgs/Imu
-    connect_address: self
+    connect_address: localhost
     port: 3001
 
   - topic: /robot2/imu
     message_type: sensor_msgs/Imu
-    connect_address: self
+    connect_address: localhost
     port: 3001
 
   # 接收中央服务器的全局命令

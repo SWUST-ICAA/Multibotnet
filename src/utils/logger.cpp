@@ -51,22 +51,26 @@ void Logger::log(LogLevel level, const std::string& msg,
     // 消息内容
     ss << " " << msg;
     
-    // 输出到控制台或ROS日志系统
+    // 直接输出到控制台，不使用ROS日志系统以避免额外的时间戳
     switch (level) {
         case LogLevel::DEBUG:
-            ROS_DEBUG_STREAM(ss.str());
+            if (color_enabled_) {
+                std::cout << ss.str() << std::endl;
+            } else {
+                std::cout << ss.str() << std::endl;
+            }
             break;
         case LogLevel::INFO:
-            ROS_INFO_STREAM(ss.str());
+            std::cout << ss.str() << std::endl;
             break;
         case LogLevel::WARN:
-            ROS_WARN_STREAM(ss.str());
+            std::cout << ss.str() << std::endl;
             break;
         case LogLevel::ERROR:
-            ROS_ERROR_STREAM(ss.str());
+            std::cerr << ss.str() << std::endl;
             break;
         case LogLevel::FATAL:
-            ROS_FATAL_STREAM(ss.str());
+            std::cerr << ss.str() << std::endl;
             break;
     }
 }
