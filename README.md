@@ -1,11 +1,5 @@
 # Multibotnet v4.0.0
 
-<div align="center">
-  <img src="docs/logo.png" alt="Multibotnet Logo" width="200"/>
-  <h3>高性能分布式多机器人通信框架</h3>
-  <p>基于ZeroMQ的ROS分布式通信解决方案</p>
-</div>
-
 [![ROS Version](https://img.shields.io/badge/ROS-Kinetic%20%7C%20Melodic%20%7C%20Noetic-blue.svg)](http://wiki.ros.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-4.0.0-brightgreen.svg)](https://github.com/nanwanuser/multibotnet/releases)
@@ -65,9 +59,7 @@ sudo apt-get install ros-$ROS_DISTRO-topic-tools
 
 ```bash
 cd ~/catkin_ws/src
-git clone https://github.com/nanwanuser/multibotnet.git
-cd multibotnet
-git checkout v4.0.0
+git clone https://github.com/SWUST-ICAA/Multibotnet.git
 ```
 
 ### 3. 编译
@@ -279,8 +271,8 @@ export ROSCONSOLE_CONFIG_FILE=`rospack find multibotnet`/config/rosconsole_debug
 
 ## 📞 联系方式
 
-- 项目主页: https://github.com/nanwanuser/multibotnet
-- 问题反馈: https://github.com/nanwanuser/multibotnet/issues
+- 项目主页: https://github.com/SWUST-ICAA/Multibotnet
+- 问题反馈: https://github.com/SWUST-ICAA/Multibotnet/issues
 - 邮箱: nanwan2004@126.com
 
 ---
