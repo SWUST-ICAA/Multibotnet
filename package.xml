@@ -54,8 +54,6 @@
   <!-- System dependencies -->
   <depend>libzmq3-dev</depend>
   <depend>yaml-cpp</depend>
-  <depend>liblz4-dev</depend>
-  <depend>zlib1g-dev</depend>
   
   <!-- Documentation -->
   <doc_depend>doxygen</doc_depend>

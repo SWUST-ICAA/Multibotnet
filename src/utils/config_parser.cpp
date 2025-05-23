@@ -1,5 +1,6 @@
 #include "multibotnet/utils/config_parser.hpp"
 #include "multibotnet/utils/logger.hpp"
+#include "multibotnet/transport/compression.hpp"
 #include <fstream>
 
 namespace multibotnet {

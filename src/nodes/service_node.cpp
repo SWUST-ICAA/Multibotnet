@@ -28,7 +28,7 @@ void printServiceStatistics() {
     
     auto stats = g_service_manager->getStatistics();
     
-    std::cout << multibotnet::blue << "========= Service Statistics =========" 
+    std::cout << BLUE << "========= Service Statistics =========" 
               << RESET << std::endl;
     
     for (const auto& pair : stats) {
@@ -41,18 +41,18 @@ void printServiceStatistics() {
         double calls_per_sec = elapsed > 0 ? 
             static_cast<double>(stat.messages_sent + stat.messages_received) / 2 / elapsed : 0;
         
-        std::cout << multibotnet::green << name << ":" << RESET << std::endl;
-        std::cout << "  Calls: " << multibotnet::yellow 
+        std::cout << GREEN << name << ":" << RESET << std::endl;
+        std::cout << "  Calls: " << YELLOW 
                   << "sent=" << stat.messages_sent 
                   << ", recv=" << stat.messages_received 
                   << " (" << calls_per_sec << " calls/s)" << RESET << std::endl;
         if (stat.errors > 0) {
-            std::cout << multibotnet::red << "  Errors: " << stat.errors 
+            std::cout << RED << "  Errors: " << stat.errors 
                       << RESET << std::endl;
         }
     }
     
-    std::cout << multibotnet::blue << "=====================================" 
+    std::cout << BLUE << "=====================================" 
               << RESET << std::endl;
 }
 

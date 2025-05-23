@@ -56,8 +56,17 @@ ros::Publisher MessageFactory::createPublisher(const std::string& topic,
         return it->second;
     }
     
-    // 创建通用发布者
-    ros::Publisher pub = nh_.advertise<topic_tools::ShapeShifter>(topic, queue_size);
+    // 创建ShapeShifter发布者
+    // 注意：需要设置正确的参数以避免模板错误
+    ros::NodeHandle nh;
+    ros::AdvertiseOptions ops;
+    ops.topic = topic;
+    ops.queue_size = queue_size;
+    ops.latch = false;
+    ops.datatype = message_type;
+    
+    // 使用内部API创建发布者
+    ros::Publisher pub = nh.advertise(ops);
     publishers_[topic] = pub;
     
     LOG_INFOF("Created publisher for topic %s with type %s", 

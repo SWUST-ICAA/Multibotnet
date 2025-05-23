@@ -1,4 +1,3 @@
-
 #ifndef MULTIBOTNET_UTILS_LOGGER_HPP
 #define MULTIBOTNET_UTILS_LOGGER_HPP
 
@@ -142,12 +141,21 @@ private:
     std::string color_;
 };
 
-// 全局颜色流对象
-inline ColorStream blue(BLUE) { return ColorStream(BLUE); }
-inline ColorStream green(GREEN) { return ColorStream(GREEN); }
-inline ColorStream yellow(YELLOW) { return ColorStream(YELLOW); }
-inline ColorStream red(RED) { return ColorStream(RED); }
-inline ColorStream purple(PURPLE) { return ColorStream(PURPLE); }
+// 全局颜色流函数（修复语法）
+inline ColorStream blue() { return ColorStream(BLUE); }
+inline ColorStream green() { return ColorStream(GREEN); }
+inline ColorStream yellow() { return ColorStream(YELLOW); }
+inline ColorStream red() { return ColorStream(RED); }
+inline ColorStream purple() { return ColorStream(PURPLE); }
+
+// 为了兼容性，保留对象式的接口
+namespace color {
+    inline ColorStream blue() { return ColorStream(BLUE); }
+    inline ColorStream green() { return ColorStream(GREEN); }
+    inline ColorStream yellow() { return ColorStream(YELLOW); }
+    inline ColorStream red() { return ColorStream(RED); }
+    inline ColorStream purple() { return ColorStream(PURPLE); }
+}
 
 } // namespace multibotnet
 

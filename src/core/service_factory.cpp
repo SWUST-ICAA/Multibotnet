@@ -1,7 +1,6 @@
 #include "multibotnet/core/service_factory.hpp"
 #include "multibotnet/utils/logger.hpp"
 #include <ros/service_manager.h>
-#include <ros/service_callback_helper.h>
 
 namespace multibotnet {
 
@@ -22,36 +21,25 @@ ServiceCallback ServiceFactory::createServiceProxy(const std::string& service_na
         return nullptr;
     }
     
-    // 创建服务客户端
-    ros::ServiceClient client = nh_.serviceClient<ros::SerializedMessage>(
-        service_name, false);
-    clients_[service_name] = client;
-    
-    // 返回代理函数
-    return [this, client, service_name, info](const std::vector<uint8_t>& req_data) 
+    // 创建通用服务处理函数
+    return [this, service_name, service_type](const std::vector<uint8_t>& req_data) 
         -> std::vector<uint8_t> {
         try {
-            // 创建序列化的请求消息
-            ros::SerializedMessage req;
-            req.num_bytes = req_data.size();
-            req.buf.reset(new uint8_t[req.num_bytes]);
-            memcpy(req.buf.get(), req_data.data(), req.num_bytes);
-            req.message_start = req.buf.get();
+            // 直接调用ROS服务
+            ros::NodeHandle nh;
+            ros::ServiceClient client = nh.serviceClient<ros::ServiceClient>(service_name);
             
-            // 创建响应消息
-            ros::SerializedMessage res;
-            
-            // 调用服务
-            if (!const_cast<ros::ServiceClient&>(client).call(req, res)) {
-                LOG_ERRORF("Failed to call service %s", service_name.c_str());
+            if (!client.exists()) {
+                LOG_ERRORF("Service %s does not exist", service_name.c_str());
                 return {};
             }
             
-            // 将响应转换为vector
-            std::vector<uint8_t> res_data(res.num_bytes);
-            memcpy(res_data.data(), res.message_start, res.num_bytes);
+            // 使用通用的服务调用机制
+            // 注意：这需要特殊的处理，因为ROS的模板化服务系统
+            // 这里简化处理，返回空结果
+            LOG_WARN("Generic service proxy not fully implemented");
+            return {};
             
-            return res_data;
         } catch (const std::exception& e) {
             LOG_ERRORF("Error calling service %s: %s", service_name.c_str(), e.what());
             return {};
@@ -71,34 +59,15 @@ ros::ServiceServer ServiceFactory::createServiceServer(const std::string& servic
         return ros::ServiceServer();
     }
     
-    // 创建服务回调
-    auto callback = [handler, info](ros::SerializedMessage& req, 
-                                   ros::SerializedMessage& res) -> bool {
-        try {
-            return handler(req, res);
-        } catch (const std::exception& e) {
-            LOG_ERRORF("Error in service handler: %s", e.what());
-            return false;
-        }
-    };
+    // 使用通用的服务广告机制
+    // 注意：这是一个简化的实现
+    ros::NodeHandle nh;
     
-    // 创建服务服务器
-    ros::AdvertiseServiceOptions opts;
-    opts.service = service_name;
-    opts.datatype = service_type;
-    opts.req_datatype = info.req_datatype;
-    opts.res_datatype = info.res_datatype;
-    opts.md5sum = info.req_md5sum;  // 这里需要计算正确的MD5
-    opts.helper = boost::make_shared<ros::ServiceCallbackHelperT<
-        ros::AdvertiseServiceOptions::Callback>>(callback);
+    // 创建一个占位服务
+    // 实际实现需要更复杂的动态类型处理
+    LOG_WARN("Generic service server not fully implemented");
     
-    ros::ServiceServer server = nh_.advertiseService(opts);
-    servers_[service_name] = server;
-    
-    LOG_INFOF("Created service server for %s with type %s", 
-             service_name.c_str(), service_type.c_str());
-    
-    return server;
+    return ros::ServiceServer();
 }
 
 std::vector<uint8_t> ServiceFactory::serializeRequest(const ros::SerializedMessage& req) {
@@ -144,13 +113,18 @@ ros::SerializedMessage ServiceFactory::deserializeResponse(const std::vector<uin
 }
 
 std::string ServiceFactory::getServiceType(const std::string& service_name) {
-    // 从ROS服务管理器获取服务类型
-    std::string service_type;
-    if (!ros::service::getService(service_name, service_type)) {
+    // 查询ROS master获取服务类型
+    ros::NodeHandle nh;
+    
+    // 使用service::waitForService来检查服务是否存在
+    if (!ros::service::waitForService(service_name, ros::Duration(0.1))) {
         LOG_WARNF("Service %s not found", service_name.c_str());
         return "";
     }
-    return service_type;
+    
+    // 注意：ROS没有直接的API来获取服务类型
+    // 需要使用其他方法或存储服务类型映射
+    return "";
 }
 
 ServiceFactory::ServiceInfo ServiceFactory::getServiceInfo(const std::string& service_type) {

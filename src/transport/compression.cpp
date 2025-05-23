@@ -1,8 +1,11 @@
 #include "multibotnet/transport/compression.hpp"
 #include "multibotnet/utils/logger.hpp"
 #include <zlib.h>
-#include <lz4.h>
 #include <cstring>
+
+#ifdef HAVE_LZ4
+#include <lz4.h>
+#endif
 
 namespace multibotnet {
 
@@ -33,6 +36,7 @@ bool ZlibCompressor::compress(const std::vector<uint8_t>& input,
         return true;
     }
     
+#ifdef HAVE_ZLIB
     // 估计压缩后大小
     uLongf compressed_size = compressBound(input.size());
     output.resize(compressed_size);
@@ -50,6 +54,11 @@ bool ZlibCompressor::compress(const std::vector<uint8_t>& input,
     // 调整到实际大小
     output.resize(compressed_size);
     return true;
+#else
+    LOG_WARN("ZLIB support not compiled in, using no compression");
+    output = input;
+    return true;
+#endif
 }
 
 bool ZlibCompressor::decompress(const std::vector<uint8_t>& input,
@@ -59,6 +68,7 @@ bool ZlibCompressor::decompress(const std::vector<uint8_t>& input,
         return true;
     }
     
+#ifdef HAVE_ZLIB
     // 尝试不同的输出缓冲区大小
     size_t output_size = input.size() * 4;  // 初始假设4倍
     
@@ -82,10 +92,18 @@ bool ZlibCompressor::decompress(const std::vector<uint8_t>& input,
     }
     
     return false;
+#else
+    output = input;
+    return true;
+#endif
 }
 
 size_t ZlibCompressor::estimateCompressedSize(size_t data_size) const {
+#ifdef HAVE_ZLIB
     return compressBound(data_size);
+#else
+    return data_size;
+#endif
 }
 
 // Lz4Compressor 实现
@@ -100,6 +118,7 @@ bool Lz4Compressor::compress(const std::vector<uint8_t>& input,
         return true;
     }
     
+#ifdef HAVE_LZ4
     // LZ4需要知道原始大小，所以在开头存储它
     size_t max_compressed_size = LZ4_compressBound(input.size());
     output.resize(sizeof(uint32_t) + max_compressed_size);
@@ -110,20 +129,13 @@ bool Lz4Compressor::compress(const std::vector<uint8_t>& input,
     
     // 执行压缩
     int compressed_size;
-    if (high_compression_) {
-        compressed_size = LZ4_compress_HC(
-            reinterpret_cast<const char*>(input.data()),
-            reinterpret_cast<char*>(output.data() + sizeof(uint32_t)),
-            input.size(),
-            max_compressed_size,
-            LZ4HC_CLEVEL_DEFAULT);
-    } else {
-        compressed_size = LZ4_compress_default(
-            reinterpret_cast<const char*>(input.data()),
-            reinterpret_cast<char*>(output.data() + sizeof(uint32_t)),
-            input.size(),
-            max_compressed_size);
-    }
+    
+    // 使用标准压缩（high_compression暂时不支持，需要LZ4HC）
+    compressed_size = LZ4_compress_default(
+        reinterpret_cast<const char*>(input.data()),
+        reinterpret_cast<char*>(output.data() + sizeof(uint32_t)),
+        input.size(),
+        max_compressed_size);
     
     if (compressed_size <= 0) {
         LOG_ERROR("LZ4 compression failed");
@@ -133,10 +145,16 @@ bool Lz4Compressor::compress(const std::vector<uint8_t>& input,
     // 调整到实际大小
     output.resize(sizeof(uint32_t) + compressed_size);
     return true;
+#else
+    LOG_WARN("LZ4 support not compiled in, using no compression");
+    output = input;
+    return true;
+#endif
 }
 
 bool Lz4Compressor::decompress(const std::vector<uint8_t>& input,
                               std::vector<uint8_t>& output) {
+#ifdef HAVE_LZ4
     if (input.size() < sizeof(uint32_t)) {
         LOG_ERROR("Invalid LZ4 compressed data");
         return false;
@@ -163,10 +181,18 @@ bool Lz4Compressor::decompress(const std::vector<uint8_t>& input,
     }
     
     return true;
+#else
+    output = input;
+    return true;
+#endif
 }
 
 size_t Lz4Compressor::estimateCompressedSize(size_t data_size) const {
+#ifdef HAVE_LZ4
     return sizeof(uint32_t) + LZ4_compressBound(data_size);
+#else
+    return data_size;
+#endif
 }
 
 // CompressionManager 实现

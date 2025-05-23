@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include "multibotnet/core/types.hpp"
+#include "multibotnet/transport/compression.hpp"
 
 namespace multibotnet {
 

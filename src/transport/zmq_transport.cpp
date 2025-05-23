@@ -7,7 +7,8 @@ namespace multibotnet {
 ZmqTransport::ZmqTransport(zmq::context_t& context, 
                          SocketType socket_type,
                          const std::string& identity)
-    : socket_(context, static_cast<int>(socket_type)),
+    : context_(context),
+      socket_(context, static_cast<int>(socket_type)),
       socket_type_(socket_type),
       identity_(identity),
       state_(ConnectionState::DISCONNECTED),
@@ -280,9 +281,14 @@ bool ZmqTransport::reconnect() {
     
     for (int i = 0; i < max_retries_; i++) {
         try {
-            // 重新创建套接字
+            // 关闭现有套接字
             socket_.close();
-            socket_ = zmq::socket_t(socket_.context_, static_cast<int>(socket_type_));
+            
+            // 等待一小段时间确保资源释放
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            
+            // 使用保存的context重新创建套接字
+            socket_ = zmq::socket_t(context_, static_cast<int>(socket_type_));
             
             // 重新设置选项
             if (!identity_.empty()) {

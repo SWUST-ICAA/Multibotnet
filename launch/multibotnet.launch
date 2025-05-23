@@ -15,8 +15,6 @@
         <param name="config_file" value="$(arg config_file)"/>
         <param name="print_statistics" value="$(arg print_statistics)"/>
         <param name="statistics_interval" value="$(arg statistics_interval)"/>
-        <env name="ROSCONSOLE_CONFIG_FILE" 
-             value="$(find multibotnet)/config/rosconsole.conf"/>
     </node>
     
     <!-- 服务通信节点 -->
@@ -25,8 +23,6 @@
         <param name="config_file" value="$(arg config_file)"/>
         <param name="print_statistics" value="$(arg print_statistics)"/>
         <param name="statistics_interval" value="$(arg statistics_interval)"/>
-        <env name="ROSCONSOLE_CONFIG_FILE" 
-             value="$(find multibotnet)/config/rosconsole.conf"/>
     </node>
     
     <!-- 可选：性能监控节点 -->
