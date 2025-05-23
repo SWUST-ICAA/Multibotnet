@@ -81,11 +81,22 @@ bool ZmqTransport::send(const std::vector<uint8_t>& data, int flags) {
         zmq::message_t msg(data.size());
         memcpy(msg.data(), data.data(), data.size());
         
+        // 使用新的API（ZMQ 4.3.1+）
+#if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 1)
+        zmq::send_result_t result = socket_.send(msg, zmq::send_flags(flags));
+        if (result.has_value()) {
+            updateStatistics(data.size(), true);
+            return true;
+        }
+        return false;
+#else
+        // 旧版本API
         bool result = socket_.send(msg, flags);
         if (result) {
             updateStatistics(data.size(), true);
         }
         return result;
+#endif
     } catch (const zmq::error_t& e) {
         LOG_ERRORF("Send error: %s", e.what());
         state_ = ConnectionState::ERROR;
@@ -145,9 +156,19 @@ bool ZmqTransport::receive(std::vector<uint8_t>& data, int timeout_ms) {
         
         if (items[0].revents & ZMQ_POLLIN) {
             zmq::message_t msg;
+            
+            // 使用新的API（ZMQ 4.3.1+）
+#if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 1)
+            zmq::recv_result_t result = socket_.recv(msg, zmq::recv_flags::none);
+            if (!result.has_value()) {
+                return false;
+            }
+#else
+            // 旧版本API
             if (!socket_.recv(&msg)) {
                 return false;
             }
+#endif
             
             data.resize(msg.size());
             memcpy(data.data(), msg.data(), msg.size());
