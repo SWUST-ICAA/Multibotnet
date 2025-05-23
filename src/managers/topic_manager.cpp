@@ -389,11 +389,22 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->transport->setOption(ZMQ_RCVHWM, rcvhwm);
         info->transport->subscribe("");  // 订阅所有消息
         
+        // 特殊处理 localhost 连接
+        std::string connect_ip = info->config.address;
+        if (connect_ip == "127.0.0.1" || connect_ip == "localhost") {
+            // 如果是本地连接，使用实际的本地IP地址
+            connect_ip = "127.0.0.1";  // 确保使用标准的本地回环地址
+        }
+        
         // 连接地址
-        std::string connect_address = "tcp://" + info->config.address + ":" + 
+        std::string connect_address = "tcp://" + connect_ip + ":" + 
                                      std::to_string(config.port);
+        
+        LOG_DEBUG("Attempting to connect to: " + connect_address);
+        
         if (!info->transport->connect(connect_address)) {
-            LOG_ERROR("Failed to connect recv topic " + config.topic);
+            LOG_ERROR("Failed to connect recv topic " + config.topic + 
+                     " to " + connect_address);
             return;
         }
         
@@ -406,7 +417,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
             &TopicManager::recvTopicLoop, this, info.get());
         
         recv_topics_.push_back(std::move(info));
-        LOG_INFO("Setup recv topic: " + config.topic);
+        LOG_INFO("Setup recv topic: " + config.topic + 
+                " connected to " + connect_address);
         
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup recv topic " + config.topic + ": " + e.what());

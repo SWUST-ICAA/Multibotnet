@@ -66,12 +66,12 @@ recv_topics:
   # 接收其他机器人的IMU数据
   - topic: /robot1/imu
     message_type: sensor_msgs/Imu
-    connect_address: localhost
+    connect_address: self
     port: 3001
 
   - topic: /robot2/imu
     message_type: sensor_msgs/Imu
-    connect_address: localhost
+    connect_address: self
     port: 3001
 
   # 接收中央服务器的全局命令

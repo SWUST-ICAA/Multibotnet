@@ -99,6 +99,9 @@ private:
     
     // 动态获取服务信息
     ServiceInfo getServiceInfo(const std::string& service_type);
+    
+    // 注册常用服务类型
+    void registerCommonServiceTypes();
 };
 
 } // namespace multibotnet
