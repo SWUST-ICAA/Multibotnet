@@ -320,4 +320,14 @@ CompressionType CompressionManager::recommendCompression(
     return CompressionType::LZ4;
 }
 
+bool CompressionManager::hasCompressionHeader(const std::vector<uint8_t>& data) {
+    if (data.size() < sizeof(CompressionHeader)) {
+        return false;
+    }
+    
+    // 检查魔术数字
+    return (data[0] == 'M' && data[1] == 'B' && 
+            data[2] == 'N' && data[3] == 'C');
+}
+
 } // namespace multibotnet

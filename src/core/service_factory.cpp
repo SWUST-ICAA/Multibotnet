@@ -22,22 +22,23 @@ ServiceCallback ServiceFactory::createServiceProxy(const std::string& service_na
     }
     
     // 创建通用服务处理函数
+    // 注意：由于ROS的限制，我们不能真正创建一个完全通用的服务代理
+    // 这里返回一个占位函数，实际使用时需要根据具体服务类型处理
     return [this, service_name, service_type](const std::vector<uint8_t>& req_data) 
         -> std::vector<uint8_t> {
         try {
-            // 直接调用ROS服务
-            ros::NodeHandle nh;
-            ros::ServiceClient client = nh.serviceClient<ros::ServiceClient>(service_name);
-            
-            if (!client.exists()) {
+            // 检查服务是否存在
+            if (!ros::service::exists(service_name, false)) {
                 LOG_ERRORF("Service %s does not exist", service_name.c_str());
                 return {};
             }
             
-            // 使用通用的服务调用机制
-            // 注意：这需要特殊的处理，因为ROS的模板化服务系统
-            // 这里简化处理，返回空结果
-            LOG_WARN("Generic service proxy not fully implemented");
+            // 这里需要实际的服务调用实现
+            // 由于ROS的模板化限制，我们不能动态创建服务客户端
+            // 实际项目中，可能需要为每种服务类型注册特定的处理器
+            LOG_WARNF("Generic service proxy not fully implemented for %s", service_name.c_str());
+            
+            // 返回空响应表示未实现
             return {};
             
         } catch (const std::exception& e) {
@@ -60,13 +61,14 @@ ros::ServiceServer ServiceFactory::createServiceServer(const std::string& servic
     }
     
     // 使用通用的服务广告机制
-    // 注意：这是一个简化的实现
+    // 由于ROS的限制，我们需要使用特定的方法来创建服务
     ros::NodeHandle nh;
     
-    // 创建一个占位服务
-    // 实际实现需要更复杂的动态类型处理
-    LOG_WARN("Generic service server not fully implemented");
+    // 创建占位服务服务器
+    // 实际实现中，需要使用服务类型特定的处理
+    LOG_WARNF("Generic service server not fully implemented for %s", service_name.c_str());
     
+    // 返回空的服务服务器
     return ros::ServiceServer();
 }
 
@@ -114,16 +116,20 @@ ros::SerializedMessage ServiceFactory::deserializeResponse(const std::vector<uin
 
 std::string ServiceFactory::getServiceType(const std::string& service_name) {
     // 查询ROS master获取服务类型
-    ros::NodeHandle nh;
-    
-    // 使用service::waitForService来检查服务是否存在
-    if (!ros::service::waitForService(service_name, ros::Duration(0.1))) {
+    // 检查服务是否存在
+    if (!ros::service::exists(service_name, false)) {
         LOG_WARNF("Service %s not found", service_name.c_str());
         return "";
     }
     
     // 注意：ROS没有直接的API来获取服务类型
-    // 需要使用其他方法或存储服务类型映射
+    // 可以通过以下方法之一：
+    // 1. 从配置中读取服务类型映射
+    // 2. 使用ROS参数服务器存储服务类型信息
+    // 3. 在服务创建时缓存类型信息
+    
+    // 这里返回空字符串，表示需要从其他地方获取类型信息
+    LOG_WARN("Service type discovery not implemented, returning empty type");
     return "";
 }
 

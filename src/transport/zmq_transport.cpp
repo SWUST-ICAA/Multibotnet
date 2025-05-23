@@ -225,6 +225,15 @@ void ZmqTransport::resetStatistics() {
     stats_.start_time = std::chrono::steady_clock::now();
 }
 
+void ZmqTransport::subscribe(const std::string& filter) {
+    if (socket_type_ != SocketType::SUB) {
+        LOG_WARN("subscribe() called on non-SUB socket");
+        return;
+    }
+    
+    socket_.setsockopt(ZMQ_SUBSCRIBE, filter.c_str(), filter.size());
+}
+
 void ZmqTransport::enableHealthCheck(bool enable, int interval_ms) {
     health_check_enabled_ = enable;
     health_check_interval_ms_ = interval_ms;

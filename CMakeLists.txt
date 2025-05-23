@@ -37,22 +37,28 @@ find_package(PkgConfig)
 if(PKG_CONFIG_FOUND)
   pkg_check_modules(LZ4 liblz4)
   if(LZ4_FOUND)
-    set(LZ4_LIBRARY ${LZ4_LIBRARIES})
+    set(LZ4_LIBRARIES ${LZ4_LIBRARIES})
     set(LZ4_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
     link_directories(${LZ4_LIBRARY_DIRS})
+    message(STATUS "Found LZ4 via pkg-config: ${LZ4_LIBRARIES}")
+  endif()
+endif()
+
+# If not found via pkg-config, try find_library
+if(NOT LZ4_FOUND)
+  find_library(LZ4_LIBRARY NAMES lz4)
+  find_path(LZ4_INCLUDE_DIR NAMES lz4.h)
+  if(LZ4_LIBRARY AND LZ4_INCLUDE_DIR)
+    set(LZ4_FOUND TRUE)
+    set(LZ4_LIBRARIES ${LZ4_LIBRARY})
+    set(LZ4_INCLUDE_DIRS ${LZ4_INCLUDE_DIR})
+    message(STATUS "Found LZ4: ${LZ4_LIBRARY}")
   endif()
 endif()
 
 if(NOT LZ4_FOUND)
-  find_library(LZ4_LIBRARY NAMES lz4)
-  find_path(LZ4_INCLUDE_DIRS NAMES lz4.h)
-endif()
-
-if(LZ4_LIBRARY AND LZ4_INCLUDE_DIRS)
-  message(STATUS "Found LZ4: ${LZ4_LIBRARY}")
-else()
   message(WARNING "LZ4 library not found, compression support will be limited")
-  set(LZ4_LIBRARY "")
+  set(LZ4_LIBRARIES "")
 endif()
 
 ## Find zlib (for compression)
@@ -96,7 +102,7 @@ if(ZLIB_FOUND)
   include_directories(${ZLIB_INCLUDE_DIRS})
 endif()
 
-if(LZ4_LIBRARY AND LZ4_INCLUDE_DIRS)
+if(LZ4_FOUND)
   add_definitions(-DHAVE_LZ4)
   include_directories(${LZ4_INCLUDE_DIRS})
 endif()
@@ -120,7 +126,7 @@ target_link_libraries(${PROJECT_NAME}_transport
   ${catkin_LIBRARIES}
   ${ZMQ_LIBRARY}
   ${ZLIB_LIBRARIES}
-  ${LZ4_LIBRARY}
+  ${LZ4_LIBRARIES}
 )
 
 ## Utils library
@@ -159,6 +165,7 @@ target_link_libraries(${PROJECT_NAME}_topic_node
   ${catkin_LIBRARIES}
   ${YAML_CPP_LIBRARIES}
   ${ZMQ_LIBRARY}
+  ${LZ4_LIBRARIES}
 )
 
 ## Service node executable
@@ -173,6 +180,7 @@ target_link_libraries(${PROJECT_NAME}_service_node
   ${catkin_LIBRARIES}
   ${YAML_CPP_LIBRARIES}
   ${ZMQ_LIBRARY}
+  ${LZ4_LIBRARIES}
 )
 
 ## Add cmake target dependencies of the executables

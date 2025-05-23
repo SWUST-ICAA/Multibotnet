@@ -111,6 +111,15 @@ private:
  */
 class CompressionManager {
 public:
+    // 压缩头部结构（公开，以便外部检查）
+    struct CompressionHeader {
+        uint8_t magic[4] = {'M', 'B', 'N', 'C'};  // Magic number
+        uint8_t version = 1;
+        uint8_t compression_type;
+        uint32_t uncompressed_size;
+        uint32_t compressed_size;
+    } __attribute__((packed));
+    
     /**
      * @brief 获取单例实例
      */
@@ -147,19 +156,17 @@ public:
      */
     CompressionType recommendCompression(size_t data_size, bool speed_priority = true);
     
+    /**
+     * @brief 检查数据是否包含压缩头部
+     * @param data 数据
+     * @return 是否包含有效的压缩头部
+     */
+    static bool hasCompressionHeader(const std::vector<uint8_t>& data);
+    
 private:
     CompressionManager() = default;
     CompressionManager(const CompressionManager&) = delete;
     CompressionManager& operator=(const CompressionManager&) = delete;
-    
-    // 压缩头部结构
-    struct CompressionHeader {
-        uint8_t magic[4] = {'M', 'B', 'N', 'C'};  // Magic number
-        uint8_t version = 1;
-        uint8_t compression_type;
-        uint32_t uncompressed_size;
-        uint32_t compressed_size;
-    } __attribute__((packed));
 };
 
 } // namespace multibotnet

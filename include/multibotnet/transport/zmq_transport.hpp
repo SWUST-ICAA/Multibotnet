@@ -96,6 +96,12 @@ public:
     void setOption(int option, const T& value);
     
     /**
+     * @brief 订阅消息（用于SUB套接字）
+     * @param filter 过滤器字符串
+     */
+    void subscribe(const std::string& filter = "");
+    
+    /**
      * @brief 获取连接状态
      * @return 当前连接状态
      */
@@ -127,6 +133,7 @@ public:
     void setReconnectPolicy(int max_retries, int retry_interval_ms);
     
 private:
+    zmq::context_t& context_;  // 保存context引用
     zmq::socket_t socket_;
     SocketType socket_type_;
     std::string identity_;

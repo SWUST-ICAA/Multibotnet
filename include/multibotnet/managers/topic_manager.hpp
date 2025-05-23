@@ -82,7 +82,7 @@ private:
     zmq::context_t context_;
     std::unique_ptr<MessageFactory> message_factory_;
     std::unique_ptr<ThreadPool> thread_pool_;
-    std::unique_ptr<CompressionManager> compression_manager_;
+    CompressionManager* compression_manager_;  // 使用原始指针，因为是单例
     
     std::vector<std::unique_ptr<SendTopicInfo>> send_topics_;
     std::vector<std::unique_ptr<RecvTopicInfo>> recv_topics_;

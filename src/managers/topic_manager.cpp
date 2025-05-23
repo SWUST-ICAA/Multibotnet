@@ -387,7 +387,7 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 设置套接字选项
         int rcvhwm = 1000;
         info->transport->setOption(ZMQ_RCVHWM, rcvhwm);
-        info->transport->setOption(ZMQ_SUBSCRIBE, "", 0);
+        info->transport->subscribe("");  // 订阅所有消息
         
         // 连接地址
         std::string connect_address = "tcp://" + info->config.address + ":" + 
@@ -473,8 +473,7 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
         
         // 解压消息（如果需要）
         std::vector<uint8_t> decompressed;
-        if (data.size() >= sizeof(CompressionManager::CompressionHeader) &&
-            memcmp(data.data(), "MBNC", 4) == 0) {
+        if (CompressionManager::hasCompressionHeader(data)) {
             // 是压缩的消息
             decompressed = compression_manager_->decompressWithHeader(data);
             if (decompressed.empty()) {
