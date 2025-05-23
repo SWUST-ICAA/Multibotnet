@@ -1,71 +1,178 @@
-# default.yaml
-# IP映射
+# Multibotnet v4.0.0 Configuration File
+# 
+# This configuration file supports dynamic message/service types,
+# compression, batching, and advanced networking features.
+
+# IP地址映射
+# 可以使用别名来简化配置
 IP:
-  self: '*'           # '*' 表示所有本机IP
-  robot1: 192.168.1.101
-  robot2: 192.168.1.102
-  robot3: 192.168.1.103
-  test_local: 127.0.0.1
+  self: '*'                    # '*' 表示绑定所有本机IP
+  localhost: '127.0.0.1'       # 本地回环
+  robot1: '192.168.1.101'      # 机器人1
+  robot2: '192.168.1.102'      # 机器人2
+  robot3: '192.168.1.103'      # 机器人3
+  server: '192.168.1.100'      # 中央服务器
+
 # 发送话题配置
+# 支持任意ROS消息类型，无需修改代码
 send_topics:
-- topic: /imu
-  message_type: sensor_msgs/Imu
-  max_frequency: 50
-  bind_address: self
-  port: 3001
-- topic: /cmd_vel
-  message_type: geometry_msgs/Twist
-  max_frequency: 40
-  bind_address: self
-  port: 3002
-- topic: /string
-  message_type: std_msgs/String
-  max_frequency: 15
-  bind_address: self
-  port: 3003
-- topic: /test1
-  message_type: std_msgs/String
-  max_frequency: 20
-  bind_address: self
-  port: 3004
+  # IMU数据发送
+  - topic: /imu
+    message_type: sensor_msgs/Imu
+    max_frequency: 50          # 最大发送频率(Hz)
+    bind_address: self         # 绑定地址(使用IP映射)
+    port: 3001
+    compression: true          # 启用压缩
+    batch: true               # 启用批处理
+    batch_size: 10            # 批处理大小
+    batch_timeout_ms: 50      # 批处理超时(毫秒)
+
+  # 速度命令发送
+  - topic: /cmd_vel
+    message_type: geometry_msgs/Twist
+    max_frequency: 40
+    bind_address: self
+    port: 3002
+    compression: false        # 实时性要求高，不压缩
+
+  # 激光雷达数据(大数据量，启用压缩)
+  - topic: /scan
+    message_type: sensor_msgs/LaserScan
+    max_frequency: 10
+    bind_address: self
+    port: 3003
+    compression: true
+    batch: true
+    batch_size: 5
+
+  # 点云数据(超大数据量，强制压缩)
+  - topic: /velodyne_points
+    message_type: sensor_msgs/PointCloud2
+    max_frequency: 10
+    bind_address: self
+    port: 3004
+    compression: true
+    batch: false              # 点云太大，不批处理
+
+  # 自定义消息示例
+  - topic: /robot_status
+    message_type: your_package/RobotStatus  # 支持任意消息类型
+    max_frequency: 1
+    bind_address: self
+    port: 3005
 
 # 接收话题配置
 recv_topics:
-- topic: /imu_recv
-  message_type: sensor_msgs/Imu
-  connect_address: test_local
-  port: 3001
-- topic: /cmd_vel_recv
-  message_type: geometry_msgs/Twist
-  connect_address: test_local
-  port: 3002
-- topic: /string_recv
-  message_type: std_msgs/String
-  connect_address: test_local
-  port: 3003
-- topic: /test1_recv
-  message_type: std_msgs/String
-  connect_address: test_local
-  port: 3004
+  # 接收其他机器人的IMU数据
+  - topic: /robot1/imu
+    message_type: sensor_msgs/Imu
+    connect_address: robot1
+    port: 3001
 
-# 提供服务配置（接收请求，REP模式）
+  - topic: /robot2/imu
+    message_type: sensor_msgs/Imu
+    connect_address: robot2
+    port: 3001
+
+  # 接收中央服务器的全局命令
+  - topic: /global_cmd_vel
+    message_type: geometry_msgs/Twist
+    connect_address: server
+    port: 3002
+
+  # 接收其他机器人的状态
+  - topic: /robot1/status
+    message_type: your_package/RobotStatus
+    connect_address: robot1
+    port: 3005
+
+# 提供服务配置
 provide_services:
-- service_name: /set_bool
-  service_type: std_srvs/SetBool
-  bind_address: self
-  port: 5555
-- service_name: /get_plan
-  service_type: nav_msgs/GetPlan
-  bind_address: self
-  port: 5556
+  # 基础服务
+  - service_name: /set_mode
+    service_type: std_srvs/SetBool
+    bind_address: self
+    port: 5001
 
-# 请求服务配置（发送请求，REQ模式）
+  # 路径规划服务
+  - service_name: /get_plan
+    service_type: nav_msgs/GetPlan
+    bind_address: self
+    port: 5002
+    timeout_ms: 10000         # 路径规划可能需要更长时间
+
+  # 自定义服务示例
+  - service_name: /robot_control
+    service_type: your_package/RobotControl
+    bind_address: self
+    port: 5003
+
+# 请求服务配置
 request_services:
-- service_name: /remote_set_bool
-  service_type: std_srvs/SetBool
-  connect_address: robot1
-  port: 5555
-- service_name: /remote_get_plan
-  service_type: nav_msgs/GetPlan
-  connect_address: robot1
-  port: 5556
+  # 请求其他机器人的服务
+  - service_name: /robot1/set_mode
+    service_type: std_srvs/SetBool
+    connect_address: robot1
+    port: 5001
+    timeout_ms: 5000
+    max_retries: 3
+
+  # 请求中央服务器的全局路径规划
+  - service_name: /server/global_planner
+    service_type: nav_msgs/GetPlan
+    connect_address: server
+    port: 5002
+    timeout_ms: 30000         # 全局规划可能很慢
+    max_retries: 1
+
+# 高级配置选项
+advanced:
+  # 压缩配置
+  compression:
+    enable: true              # 全局启用压缩
+    type: lz4                 # 压缩算法: none, zlib, lz4
+    level: 6                  # 压缩级别(仅zlib): 1-9
+
+  # 批处理配置
+  batch:
+    enable: true              # 全局启用批处理
+    size: 10                  # 默认批处理大小
+    timeout_ms: 100           # 默认批处理超时
+
+  # 线程池配置
+  thread_pool:
+    size: 0                   # 0表示自动(CPU核心数)
+
+  # 连接池配置
+  connection_pool:
+    min_connections: 1        # 最小连接数
+    max_connections: 10       # 最大连接数
+    connection_timeout_ms: 5000
+    idle_timeout_ms: 60000    # 空闲连接超时
+
+  # 性能监控
+  performance:
+    enable_statistics: true   # 启用统计
+    statistics_interval_ms: 5000
+
+  # 健康检查
+  health_check:
+    enable: true
+    interval_ms: 5000
+
+  # 重试策略
+  retry:
+    max_retries: 3
+    interval_ms: 1000
+
+# 负载均衡配置(可选，用于多目标场景)
+load_balancing:
+  enable: false
+  strategy: round_robin       # round_robin, least_loaded, random, weighted
+  targets:
+    - address: robot1
+      weight: 1
+    - address: robot2
+      weight: 1
+    - address: robot3
+      weight: 2               # robot3有更高的处理能力
