@@ -75,6 +75,7 @@ private:
         std::thread service_thread;
         std::atomic<bool> active;
         Statistics stats;
+        bool thread_should_start;  // 新增：标记线程是否应该启动
     };
     
     // 请求服务信息

@@ -35,6 +35,15 @@ void ServiceManager::start() {
     
     running_ = true;
     
+    // 启动所有服务提供线程
+    for (auto& provide_service : provide_services_) {
+        if (provide_service->thread_should_start && !provide_service->service_thread.joinable()) {
+            provide_service->active = true;
+            provide_service->service_thread = std::thread(
+                &ServiceManager::serviceProviderLoop, this, provide_service.get());
+        }
+    }
+    
     // 启动请求处理线程
     request_processor_thread_ = std::thread(
         &ServiceManager::processRequestQueue, this);
@@ -267,7 +276,8 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
         auto info = std::make_unique<ProvideServiceInfo>();
         info->config = config;
         info->config.address = resolveAddress(config.address);
-        info->active = true;
+        info->active = false;  // 初始化为false，在start()中设置为true
+        info->thread_should_start = true;  // 标记线程应该启动
         info->stats.start_time = std::chrono::steady_clock::now();
         
         // 创建ZMQ传输
@@ -277,10 +287,6 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
         // 设置套接字选项
         int linger = 0;
         info->transport->setOption(ZMQ_LINGER, linger);
-        
-        // 不要设置RCVTIMEO，让poll来控制超时
-        // int rcv_timeout = 100;  // 100ms
-        // info->transport->setOption(ZMQ_RCVTIMEO, rcv_timeout);
         
         // 绑定地址
         std::string bind_address = "tcp://" + info->config.address + ":" + 
@@ -293,9 +299,7 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
         LOG_INFOF("Successfully bound service %s to %s", 
                  config.service_name.c_str(), bind_address.c_str());
         
-        // 启动服务线程
-        info->service_thread = std::thread(
-            &ServiceManager::serviceProviderLoop, this, info.get());
+        // 不在这里启动线程，而是在start()函数中启动
         
         provide_services_.push_back(std::move(info));
         LOG_INFO("Setup provide service: " + config.service_name + 
@@ -477,9 +481,6 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
             // 设置套接字选项
             int linger = 0;
             transport->setOption(ZMQ_LINGER, linger);
-            
-            // 不要在套接字上设置接收超时，让poll控制超时
-            // transport->setOption(ZMQ_RCVTIMEO, timeout_ms);
             
             // 连接到服务器
             if (!transport->connect(connect_address)) {
