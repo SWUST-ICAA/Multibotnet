@@ -38,6 +38,17 @@ void TopicManager::start() {
     
     running_ = true;
     
+    // 启动所有接收线程（必须在 running_ = true 之后）
+    for (auto& recv_topic : recv_topics_) {
+        if (!recv_topic->recv_thread.joinable()) {
+            recv_topic->active = true;
+            recv_topic->recv_thread = std::thread(
+                &TopicManager::recvTopicLoop, this, recv_topic.get());
+            LOG_DEBUGF("Started receive thread for topic %s", 
+                      recv_topic->config.topic.c_str());
+        }
+    }
+    
     // 启动批处理定时器
     ros::NodeHandle nh;
     batch_timer_ = nh.createTimer(ros::Duration(0.1), 
@@ -61,6 +72,10 @@ void TopicManager::stop() {
     // 停止所有接收线程
     for (auto& recv_topic : recv_topics_) {
         recv_topic->active = false;
+    }
+    
+    // 等待所有接收线程结束
+    for (auto& recv_topic : recv_topics_) {
         if (recv_topic->recv_thread.joinable()) {
             recv_topic->recv_thread.join();
         }
@@ -413,7 +428,7 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         auto info = std::make_unique<RecvTopicInfo>();
         info->config = config;
         info->config.address = resolveAddress(config.address);
-        info->active = true;
+        info->active = false;  // 先设置为false，在start()中启动
         info->first_message = true;
         info->has_advertised = false;
         
@@ -452,9 +467,7 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 增加延迟时间，确保订阅生效（这是ZMQ PUB-SUB模式的特性）
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         
-        // 启动接收线程
-        info->recv_thread = std::thread(
-            &TopicManager::recvTopicLoop, this, info.get());
+        // 不在这里启动接收线程，而是在start()函数中启动
         
         recv_topics_.push_back(std::move(info));
         LOG_INFO("Setup recv topic: " + config.topic + 
@@ -470,6 +483,13 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
     static std::mutex log_mutex;
     
     LOG_DEBUGF("Starting receive loop for topic %s", info->config.topic.c_str());
+    
+    // 确保活动标志已设置
+    if (!info->active) {
+        LOG_WARNF("Receive loop for topic %s started but not active", 
+                 info->config.topic.c_str());
+        return;
+    }
     
     while (info->active && running_ && ros::ok()) {
         try {
@@ -501,7 +521,8 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
         }
     }
     
-    LOG_DEBUGF("Exiting receive loop for topic %s", info->config.topic.c_str());
+    LOG_DEBUGF("Exiting receive loop for topic %s (active=%d, running=%d, ros::ok=%d)", 
+              info->config.topic.c_str(), info->active.load(), running_.load(), ros::ok());
 }
 
 void TopicManager::processReceivedMessage(RecvTopicInfo* info, 
