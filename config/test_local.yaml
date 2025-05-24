@@ -1,0 +1,127 @@
+# Multibotnet v4.0.0 本地回环测试配置
+# 用于在单机上测试话题和服务通信
+# 所有通信都通过localhost进行
+
+# IP地址映射
+IP:
+  self: '*'                    # 绑定所有本机IP
+  localhost: '127.0.0.1'       # 本地回环
+
+# 发送话题配置（本地发布的话题）
+send_topics:
+  # IMU数据
+  - topic: /imu
+    message_type: sensor_msgs/Imu
+    max_frequency: 50
+    bind_address: self
+    port: 3001
+    compression: true
+    batch: true
+    batch_size: 10
+
+  # 速度命令
+  - topic: /cmd_vel
+    message_type: geometry_msgs/Twist
+    max_frequency: 40
+    bind_address: self
+    port: 3002
+    compression: false
+
+  # 激光雷达数据
+  - topic: /scan
+    message_type: sensor_msgs/LaserScan
+    max_frequency: 10
+    bind_address: self
+    port: 3003
+    compression: true
+    batch: false
+
+# 接收话题配置（通过localhost接收，模拟从其他机器人接收）
+recv_topics:
+
+  - topic: /topic_test/imu
+    message_type: sensor_msgs/Imu
+    connect_address: localhost
+    port: 3001
+
+  - topic: /topic_test/cmd_vel
+    message_type: geometry_msgs/Twist
+    connect_address: localhost
+    port: 3002
+
+  - topic: /tetopic_testst/scan
+    message_type: sensor_msgs/LaserScan
+    connect_address: localhost
+    port: 3003
+
+# 提供服务配置
+provide_services:
+  # SetBool服务
+  - service_name: /set_mode
+    service_type: std_srvs/SetBool
+    bind_address: self
+    port: 5001
+
+  # Trigger服务
+  - service_name: /test_trigger
+    service_type: std_srvs/Trigger
+    bind_address: self
+    port: 5002
+
+# 请求服务配置（通过localhost请求）
+request_services:
+  # 请求本地的set_mode服务
+  - service_name: /server_test/set_mode
+    service_type: std_srvs/SetBool
+    connect_address: localhost
+    port: 5001
+    timeout_ms: 5000
+    max_retries: 3
+
+  # 请求本地的trigger服务
+  - service_name: /server_test/test_trigger
+    service_type: std_srvs/Trigger
+    connect_address: localhost
+    port: 5002
+    timeout_ms: 5000
+    max_retries: 3
+
+# 高级配置选项
+advanced:
+  # 压缩配置
+  compression:
+    enable: true
+    type: lz4                 # 使用LZ4实现高速压缩
+    level: 6
+
+  # 批处理配置
+  batch:
+    enable: true
+    size: 10
+    timeout_ms: 100
+
+  # 线程池配置
+  thread_pool:
+    size: 4
+
+  # 连接池配置
+  connection_pool:
+    min_connections: 1
+    max_connections: 5
+    connection_timeout_ms: 5000
+    idle_timeout_ms: 60000
+
+  # 性能监控
+  performance:
+    enable_statistics: true
+    statistics_interval_ms: 5000
+
+  # 健康检查
+  health_check:
+    enable: false            # 本地测试关闭健康检查
+    interval_ms: 5000
+
+  # 重试策略
+  retry:
+    max_retries: 3
+    interval_ms: 1000

@@ -1,0 +1,28 @@
+<launch>
+    <!-- 配置文件参数 -->
+    <arg name="config_file" default="$(find multibotnet)/config/test_local.yaml"/>
+    
+    <!-- 是否打印统计信息 -->
+    <arg name="print_statistics" default="true"/>
+    <arg name="statistics_interval" default="5"/>
+    
+    <!-- 日志级别 -->
+    <arg name="log_level" default="info"/>
+    
+    <!-- 话题通信节点 -->
+    <node pkg="multibotnet" type="multibotnet_topic_node" name="multibotnet_topic_node" 
+          output="screen" respawn="false" required="true">
+        <param name="config_file" value="$(arg config_file)"/>
+        <param name="print_statistics" value="$(arg print_statistics)"/>
+        <param name="statistics_interval" value="$(arg statistics_interval)"/>
+    </node>
+    
+    <!-- 服务通信节点 -->
+    <node pkg="multibotnet" type="multibotnet_service_node" name="multibotnet_service_node" 
+          output="screen" respawn="false" required="true">
+        <param name="config_file" value="$(arg config_file)"/>
+        <param name="print_statistics" value="$(arg print_statistics)"/>
+        <param name="statistics_interval" value="$(arg statistics_interval)"/>
+    </node>
+    
+</launch>
