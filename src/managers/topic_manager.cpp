@@ -278,21 +278,54 @@ void TopicManager::handleTopicMessage(SendTopicInfo* info,
     }
     
     try {
-        // 序列化消息
+        // 创建带元数据的消息格式
+        // [4字节: 类型长度][类型字符串][4字节: MD5长度][MD5字符串][4字节: 定义长度][定义字符串][消息数据]
+        std::vector<uint8_t> full_message;
+        
+        // 获取消息元数据
+        std::string msg_type = msg->getDataType();
+        std::string msg_md5 = msg->getMD5Sum();
+        std::string msg_def = msg->getMessageDefinition();
+        
+        // 写入类型长度和类型
+        uint32_t type_len = msg_type.size();
+        full_message.insert(full_message.end(), 
+                           reinterpret_cast<uint8_t*>(&type_len),
+                           reinterpret_cast<uint8_t*>(&type_len) + 4);
+        full_message.insert(full_message.end(), msg_type.begin(), msg_type.end());
+        
+        // 写入MD5长度和MD5
+        uint32_t md5_len = msg_md5.size();
+        full_message.insert(full_message.end(),
+                           reinterpret_cast<uint8_t*>(&md5_len),
+                           reinterpret_cast<uint8_t*>(&md5_len) + 4);
+        full_message.insert(full_message.end(), msg_md5.begin(), msg_md5.end());
+        
+        // 写入定义长度和定义
+        uint32_t def_len = msg_def.size();
+        full_message.insert(full_message.end(),
+                           reinterpret_cast<uint8_t*>(&def_len),
+                           reinterpret_cast<uint8_t*>(&def_len) + 4);
+        full_message.insert(full_message.end(), msg_def.begin(), msg_def.end());
+        
+        // 序列化消息数据
         auto serialized = message_factory_->serialize(msg);
         if (serialized.empty()) {
             LOG_ERROR("Failed to serialize message");
             return;
         }
         
+        // 添加消息数据
+        full_message.insert(full_message.end(), serialized.begin(), serialized.end());
+        
         // 压缩消息（如果启用）
         std::vector<uint8_t> data_to_send;
         if (info->config.enable_compression) {
             CompressionType comp_type = compression_manager_->recommendCompression(
-                serialized.size(), true);  // 速度优先
-            data_to_send = compression_manager_->compressWithHeader(serialized, comp_type);
+                full_message.size(), true);  // 速度优先
+            data_to_send = compression_manager_->compressWithHeader(full_message, comp_type);
         } else {
-            data_to_send = serialized;
+            data_to_send = full_message;
         }
         
         // 批处理（如果启用）
@@ -380,8 +413,13 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->active = true;
         info->first_message = true;
         info->has_advertised = false;
-        // 初始化发布者为空
-        info->publisher = ros::Publisher();
+        
+        // 提前创建发布者，使用配置中的消息类型
+        info->publisher = message_factory_->createPublisher(
+            config.topic,
+            config.message_type,
+            10
+        );
         
         // 创建ZMQ传输
         info->transport = std::make_shared<ZmqTransport>(
@@ -412,11 +450,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 订阅所有消息
         info->transport->subscribe("");
         
-        // 延迟一小段时间，确保订阅生效（解决慢连接问题）
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        
-        // 不在这里创建发布者，等待第一条消息到达时创建
-        // 这样可以获得正确的消息类型信息
+        // 增加延迟时间，确保订阅生效
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
         // 启动接收线程
         info->recv_thread = std::thread(
@@ -467,62 +502,6 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
 void TopicManager::processReceivedMessage(RecvTopicInfo* info, 
                                         const std::vector<uint8_t>& data) {
     try {
-        // 检查是否是批处理消息
-        bool is_batch = false;
-        if (data.size() >= 4) {
-            // 批处理消息的魔术检查
-            // 批处理格式：[消息数量(4字节)][消息1长度(4字节)][消息1数据]...
-            uint32_t msg_count;
-            memcpy(&msg_count, data.data(), 4);
-            
-            // 合理的批处理消息数量范围检查
-            if (msg_count > 0 && msg_count <= 100 && data.size() > 8) {
-                // 进一步验证：检查第一个消息的长度是否合理
-                uint32_t first_msg_size;
-                memcpy(&first_msg_size, data.data() + 4, 4);
-                
-                // 如果第一个消息的大小加上头部信息不超过总大小，可能是批处理
-                if (first_msg_size > 0 && 8 + first_msg_size <= data.size()) {
-                    // 再检查是否有压缩头部（避免误判）
-                    if (8 + first_msg_size < data.size() || 
-                        !CompressionManager::hasCompressionHeader(data)) {
-                        is_batch = true;
-                    }
-                }
-            }
-        }
-        
-        if (is_batch) {
-            // 处理批处理消息
-            uint32_t msg_count;
-            memcpy(&msg_count, data.data(), 4);
-            
-            size_t offset = 4;
-            size_t processed = 0;
-            
-            while (offset < data.size() && processed < msg_count) {
-                if (offset + 4 > data.size()) break;
-                
-                uint32_t msg_size;
-                memcpy(&msg_size, data.data() + offset, 4);
-                offset += 4;
-                
-                if (offset + msg_size > data.size()) break;
-                
-                std::vector<uint8_t> single_msg(
-                    data.begin() + offset,
-                    data.begin() + offset + msg_size);
-                
-                // 递归处理单个消息
-                processReceivedMessage(info, single_msg);
-                
-                offset += msg_size;
-                processed++;
-            }
-            
-            return;  // 批处理消息处理完成
-        }
-        
         // 解压消息（如果需要）
         std::vector<uint8_t> decompressed;
         if (CompressionManager::hasCompressionHeader(data)) {
@@ -535,12 +514,72 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
             decompressed = data;
         }
         
+        // 解析消息格式
+        size_t offset = 0;
+        
+        // 读取类型长度
+        if (decompressed.size() < offset + 4) {
+            LOG_ERROR("Invalid message format: too small for type length");
+            return;
+        }
+        uint32_t type_len;
+        memcpy(&type_len, decompressed.data() + offset, 4);
+        offset += 4;
+        
+        // 读取类型
+        if (decompressed.size() < offset + type_len) {
+            LOG_ERROR("Invalid message format: too small for type");
+            return;
+        }
+        std::string msg_type(decompressed.begin() + offset, 
+                            decompressed.begin() + offset + type_len);
+        offset += type_len;
+        
+        // 读取MD5长度
+        if (decompressed.size() < offset + 4) {
+            LOG_ERROR("Invalid message format: too small for MD5 length");
+            return;
+        }
+        uint32_t md5_len;
+        memcpy(&md5_len, decompressed.data() + offset, 4);
+        offset += 4;
+        
+        // 读取MD5
+        if (decompressed.size() < offset + md5_len) {
+            LOG_ERROR("Invalid message format: too small for MD5");
+            return;
+        }
+        std::string md5sum(decompressed.begin() + offset,
+                          decompressed.begin() + offset + md5_len);
+        offset += md5_len;
+        
+        // 读取定义长度
+        if (decompressed.size() < offset + 4) {
+            LOG_ERROR("Invalid message format: too small for definition length");
+            return;
+        }
+        uint32_t def_len;
+        memcpy(&def_len, decompressed.data() + offset, 4);
+        offset += 4;
+        
+        // 读取定义
+        if (decompressed.size() < offset + def_len) {
+            LOG_ERROR("Invalid message format: too small for definition");
+            return;
+        }
+        std::string msg_def(decompressed.begin() + offset,
+                           decompressed.begin() + offset + def_len);
+        offset += def_len;
+        
+        // 提取消息数据
+        std::vector<uint8_t> msg_data(decompressed.begin() + offset, decompressed.end());
+        
         // 反序列化消息
         auto shape_shifter_msg = message_factory_->deserialize(
-            decompressed,
-            info->config.message_type,
-            "",
-            ""
+            msg_data,
+            msg_type,
+            md5sum,
+            msg_def
         );
         
         if (!shape_shifter_msg) {
