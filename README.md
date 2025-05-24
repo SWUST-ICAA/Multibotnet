@@ -2,7 +2,7 @@
 
 [![ROS Version](https://img.shields.io/badge/ROS-Kinetic%20%7C%20Melodic%20%7C%20Noetic-blue.svg)](http://wiki.ros.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.0.0-brightgreen.svg)](https://github.com/nanwanuser/multibotnet/releases)
+[![Version](https://img.shields.io/badge/Version-4.0.0-brightgreen.svg)](https://github.com/SWUST-ICAA/Multibotnet/releases)
 
 ## 🎉 v4.0.0 重大更新
 
@@ -29,6 +29,17 @@
    - 清晰的分层设计：核心层、传输层、管理层、工具层
    - 易于维护和扩展
    - 完善的异常处理和日志系统
+
+## 🙏 致谢
+
+**特别感谢 Anthropic Claude 4 的发布！** 本项目 v4.0.0 版本的重大重构得益于 Claude 4 强大的代码理解和生成能力。Claude 4 在以下方面提供了关键支持：
+
+- 🔧 **架构重构**: 协助设计了更加模块化和可扩展的系统架构
+- 📝 **代码优化**: 提供了高质量的C++代码实现和性能优化建议
+- 🐛 **问题定位**: 帮助快速定位和解决复杂的技术问题
+- 📚 **文档编写**: 协助编写了详细的技术文档和使用说明
+
+Claude 4 的出色表现极大地提升了开发效率，使得 Multibotnet v4.0.0 能够在短时间内完成如此大规模的升级。这充分展示了 AI 辅助编程的巨大潜力！
 
 ## 📋 系统要求
 
@@ -128,6 +139,231 @@ roslaunch multibotnet multibotnet.launch \
   config_file:=config/my_robot.yaml \
   print_statistics:=true \
   statistics_interval:=5.0
+```
+
+## 🔧 添加新的服务类型
+
+Multibotnet v4.0.0 已经支持以下内置服务类型：
+- `std_srvs/SetBool`
+- `std_srvs/Trigger`
+- `std_srvs/Empty`
+- `nav_msgs/GetPlan`
+- `nav_msgs/GetMap`
+
+### 添加新服务类型的步骤
+
+如果需要支持新的服务类型，按以下步骤操作：
+
+#### 1. 修改 `core/service_factory.hpp`
+
+在文件顶部添加新服务类型的头文件：
+
+```cpp
+// 添加新的服务类型头文件
+#include <your_package/YourService.h>
+```
+
+#### 2. 修改 `core/service_factory.cpp`
+
+##### 2.1 在 `registerBuiltinServices()` 中注册新服务类型
+
+```cpp
+void ServiceFactory::registerBuiltinServices() {
+    // ... 现有的注册代码 ...
+    
+    // 注册新的服务类型
+    registerServiceType("your_package/YourService",
+        [this](const std::string& name) { return createYourServiceHandler(name); });
+    
+    LOG_INFO("Registered built-in service types");
+}
+```
+
+##### 2.2 声明处理函数（在私有成员中）
+
+在 `service_factory.hpp` 的私有成员部分添加：
+
+```cpp
+private:
+    // ... 现有的声明 ...
+    
+    // 新服务的处理函数
+    LocalServiceHandler createYourServiceHandler(const std::string& service_name);
+```
+
+##### 2.3 实现处理函数
+
+在 `service_factory.cpp` 中添加：
+
+```cpp
+ServiceFactory::LocalServiceHandler ServiceFactory::createYourServiceHandler(
+    const std::string& service_name) {
+    
+    return [this, service_name](const std::vector<uint8_t>& req_data,
+                               std::vector<uint8_t>& res_data) -> bool {
+        try {
+            // 反序列化请求
+            your_package::YourService::Request req;
+            if (!deserializeRequest(req_data, req)) {
+                LOG_ERROR("Failed to deserialize YourService request");
+                return false;
+            }
+            
+            // 调用本地ROS服务
+            ros::ServiceClient client = nh_.serviceClient<your_package::YourService>(service_name);
+            if (!client.exists()) {
+                LOG_ERRORF("Service %s does not exist", service_name.c_str());
+                return false;
+            }
+            
+            your_package::YourService srv;
+            srv.request = req;
+            
+            if (client.call(srv)) {
+                // 序列化响应
+                res_data = serializeResponse(srv.response);
+                return true;
+            } else {
+                LOG_ERRORF("Failed to call service %s", service_name.c_str());
+                return false;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERRORF("Exception in YourService handler: %s", e.what());
+            return false;
+        }
+    };
+}
+```
+
+##### 2.4 在 `createServiceServer()` 中添加新服务类型的处理
+
+```cpp
+ros::ServiceServer ServiceFactory::createServiceServer(
+    const std::string& service_name,
+    const std::string& service_type,
+    const ServiceHandler& remote_handler) {
+    
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // ... 现有的代码 ...
+    
+    } else if (service_type == "your_package/YourService") {
+        auto server = nh_.advertiseService(service_name,
+            boost::function<bool(your_package::YourService::Request&,
+                               your_package::YourService::Response&)>(
+                [remote_handler](your_package::YourService::Request& req,
+                               your_package::YourService::Response& res) -> bool {
+                    // 序列化请求
+                    auto req_data = serializeRequest(req);
+                    
+                    // 调用远程服务
+                    auto res_data = remote_handler(req_data);
+                    if (res_data.empty()) {
+                        return false;
+                    }
+                    
+                    // 反序列化响应
+                    if (!deserializeResponse(res_data, res)) {
+                        return false;
+                    }
+                    
+                    return true;
+                }
+            )
+        );
+        servers_[service_name] = server;
+        return server;
+        
+    } else {
+        // ... 现有的代码 ...
+    }
+}
+```
+
+#### 3. 更新 CMakeLists.txt
+
+如果新服务类型来自外部包，需要在 `CMakeLists.txt` 中添加依赖：
+
+```cmake
+find_package(catkin REQUIRED COMPONENTS
+  # ... 现有的组件 ...
+  your_package  # 添加包含新服务类型的包
+)
+```
+
+#### 4. 重新编译
+
+```bash
+cd ~/catkin_ws
+catkin_make
+```
+
+#### 5. 在配置文件中使用新服务
+
+现在可以在配置文件中使用新的服务类型：
+
+```yaml
+provide_services:
+  - service_name: /my_custom_service
+    service_type: your_package/YourService
+    bind_address: self
+    port: 5003
+
+request_services:
+  - service_name: /remote/my_custom_service
+    service_type: your_package/YourService
+    connect_address: robot_peer
+    port: 5003
+    timeout_ms: 5000
+```
+
+### 示例：添加 geometry_msgs/SetPose 服务
+
+以下是一个完整的示例，展示如何添加 `geometry_msgs/SetPose` 服务支持：
+
+```cpp
+// 1. 在 service_factory.hpp 添加头文件
+#include <geometry_msgs/SetPose.h>
+
+// 2. 在 registerBuiltinServices() 中注册
+registerServiceType("geometry_msgs/SetPose",
+    [this](const std::string& name) { return createSetPoseHandler(name); });
+
+// 3. 实现处理函数
+ServiceFactory::LocalServiceHandler ServiceFactory::createSetPoseHandler(
+    const std::string& service_name) {
+    
+    return [this, service_name](const std::vector<uint8_t>& req_data,
+                               std::vector<uint8_t>& res_data) -> bool {
+        try {
+            geometry_msgs::SetPose::Request req;
+            if (!deserializeRequest(req_data, req)) {
+                LOG_ERROR("Failed to deserialize SetPose request");
+                return false;
+            }
+            
+            ros::ServiceClient client = nh_.serviceClient<geometry_msgs::SetPose>(service_name);
+            if (!client.exists()) {
+                LOG_ERRORF("Service %s does not exist", service_name.c_str());
+                return false;
+            }
+            
+            geometry_msgs::SetPose srv;
+            srv.request = req;
+            
+            if (client.call(srv)) {
+                res_data = serializeResponse(srv.response);
+                return true;
+            } else {
+                LOG_ERRORF("Failed to call service %s", service_name.c_str());
+                return false;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERRORF("Exception in SetPose handler: %s", e.what());
+            return false;
+        }
+    };
+}
 ```
 
 ## 📊 性能优化指南
@@ -263,12 +499,6 @@ export ROSCONSOLE_CONFIG_FILE=`rospack find multibotnet`/config/rosconsole_debug
 
 本项目采用 Apache License 2.0 许可证 - 详见 [LICENSE](LICENSE) 文件
 
-## 🙏 致谢
-
-- ROS社区提供的优秀框架
-- ZeroMQ项目提供的高性能消息库
-- 所有贡献者和用户的支持
-
 ## 📞 联系方式
 
 - 项目主页: https://github.com/SWUST-ICAA/Multibotnet
@@ -278,3 +508,5 @@ export ROSCONSOLE_CONFIG_FILE=`rospack find multibotnet`/config/rosconsole_debug
 ---
 
 **Multibotnet** - 让多机器人协作更简单、更高效！
+
+**Powered by ZeroMQ and Enhanced by Claude 4** 🚀
