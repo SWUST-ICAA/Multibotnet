@@ -25,9 +25,4 @@
         <param name="statistics_interval" value="$(arg statistics_interval)"/>
     </node>
     
-    <!-- 可选：性能监控节点 -->
-    <group if="$(arg print_statistics)">
-        <node pkg="rostopic" type="rostopic" name="multibotnet_monitor" 
-              args="hz /diagnostics" output="screen"/>
-    </group>
 </launch>
