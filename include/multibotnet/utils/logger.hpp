@@ -91,7 +91,7 @@ public:
     }
     
 private:
-    Logger() : level_(LogLevel::INFO), color_enabled_(true) {}
+    Logger() : level_(LogLevel::DEBUG), color_enabled_(true) {}  // 默认设置为DEBUG级别
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
     

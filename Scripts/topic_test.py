@@ -50,10 +50,41 @@ class TopicTest:
         print(CYAN + "\n========== Multibotnet Topic Test ==========" + RESET)
         print(GREEN + "Testing topic forwarding through Multibotnet..." + RESET)
         
-        # 等待订阅者和发布者建立连接
-        print(YELLOW + "\nWaiting for connections to establish..." + RESET)
-        rospy.sleep(1.0)  # 增加等待时间
+        # 增加等待时间，让ZMQ订阅充分建立
+        print(YELLOW + "\nWaiting for connections to establish (3 seconds)..." + RESET)
+        rospy.sleep(3.0)  # 增加到3秒
         
+        # 发送几条"预热"消息（这些可能会丢失，但能帮助建立连接）
+        print(YELLOW + "Sending warm-up messages..." + RESET)
+        self.send_warmup_messages()
+        rospy.sleep(1.0)
+        
+    def send_warmup_messages(self):
+        """发送预热消息，帮助建立ZMQ连接"""
+        for i in range(5):
+            # IMU消息
+            imu_msg = Imu()
+            imu_msg.header.stamp = rospy.Time.now()
+            imu_msg.header.frame_id = "imu_link"
+            imu_msg.linear_acceleration.z = 9.8
+            self.pub_imu.publish(imu_msg)
+            
+            # Twist消息
+            twist_msg = Twist()
+            twist_msg.linear.x = 0.0
+            self.pub_cmd_vel.publish(twist_msg)
+            
+            # LaserScan消息
+            scan_msg = LaserScan()
+            scan_msg.header.stamp = rospy.Time.now()
+            scan_msg.header.frame_id = "laser_frame"
+            scan_msg.ranges = [1.0] * 10  # 简化的数据
+            self.pub_scan.publish(scan_msg)
+            
+            rospy.sleep(0.1)
+        
+        print(GREEN + "✓ Warm-up messages sent" + RESET)
+    
     def imu_callback(self, msg):
         self.received['/topic_test/imu'] += 1
         if self.received['/topic_test/imu'] == 1:
@@ -124,6 +155,11 @@ class TopicTest:
             self.sent['/scan'] += 1
             
             msg_count += 1
+            
+            # 每10条消息打印一次进度
+            if msg_count % 10 == 0:
+                print(f"  Published {msg_count} messages...")
+            
             rate.sleep()
         
         print(f"Published {msg_count} messages of each type")
@@ -131,7 +167,19 @@ class TopicTest:
     def wait_for_messages(self, timeout=2.0):
         """等待消息接收"""
         print(YELLOW + f"\nWaiting {timeout}s for messages to be received..." + RESET)
-        rospy.sleep(timeout)
+        
+        # 实时显示接收进度
+        start_time = time.time()
+        last_counts = dict(self.received)
+        
+        while time.time() - start_time < timeout:
+            rospy.sleep(0.5)
+            
+            # 检查是否有新消息
+            for topic in self.received:
+                if self.received[topic] > last_counts[topic]:
+                    print(f"  {topic}: received {self.received[topic]} messages")
+                    last_counts[topic] = self.received[topic]
     
     def print_results(self):
         """打印测试结果"""
@@ -208,19 +256,15 @@ def main():
     try:
         tester = TopicTest()
         
-        # 等待系统初始化
-        print(YELLOW + "\nGiving Multibotnet more time to establish connections..." + RESET)
-        rospy.sleep(2.0)  # 增加等待时间
-        
         # 基础测试
         print(CYAN + "\n======== Basic Test ========" + RESET)
         tester.publish_test_messages(duration=3.0, rate_hz=10)
-        tester.wait_for_messages(timeout=2.0)
+        tester.wait_for_messages(timeout=3.0)  # 增加等待时间
         
         # 高频测试
         print(CYAN + "\n======== High Frequency Test ========" + RESET)
         tester.publish_test_messages(duration=2.0, rate_hz=20)
-        tester.wait_for_messages(timeout=2.0)
+        tester.wait_for_messages(timeout=3.0)  # 增加等待时间
         
         # 打印结果
         tester.print_results()

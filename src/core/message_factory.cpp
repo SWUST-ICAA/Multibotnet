@@ -16,7 +16,7 @@ ros::Subscriber MessageFactory::createSubscriber(const std::string& topic,
     
     // 创建通用订阅者，使用ShapeShifter处理任意消息类型
     auto sub = nh_.subscribe<topic_tools::ShapeShifter>(
-        topic, 1,
+        topic, 10,  // 增加队列大小
         [this, callback, topic](const boost::shared_ptr<topic_tools::ShapeShifter const>& msg) {
             try {
                 // 缓存话题信息
@@ -27,8 +27,8 @@ ros::Subscriber MessageFactory::createSubscriber(const std::string& topic,
                     info.definition = msg->getMessageDefinition();
                     topic_info_cache_[topic] = info;
                     
-                    LOG_INFOF("Cached topic info for %s: type=%s", 
-                             topic.c_str(), info.type.c_str());
+                    LOG_INFOF("Cached topic info for %s: type=%s, md5=%s", 
+                             topic.c_str(), info.type.c_str(), info.md5sum.c_str());
                 }
                 
                 // 调用回调，传递非const版本
@@ -42,6 +42,7 @@ ros::Subscriber MessageFactory::createSubscriber(const std::string& topic,
     );
     
     subscribers_[topic] = sub;
+    LOG_INFOF("Created subscriber for topic %s", topic.c_str());
     return sub;
 }
 
@@ -108,10 +109,16 @@ std::vector<uint8_t> MessageFactory::serialize(const ShapeShifterPtr& msg) {
     }
     
     try {
-        // 简化序列化：只序列化消息数据本身，不包含元数据
-        // 这样与v3版本兼容
+        // 获取序列化大小
         uint32_t serial_size = ros::serialization::serializationLength(*msg);
+        
+        LOG_DEBUGF("Serializing message of type %s, size: %u bytes", 
+                  msg->getDataType().c_str(), serial_size);
+        
+        // 分配缓冲区
         std::vector<uint8_t> buffer(serial_size);
+        
+        // 序列化
         ros::serialization::OStream stream(buffer.data(), serial_size);
         ros::serialization::serialize(stream, *msg);
         
@@ -134,32 +141,26 @@ MessageFactory::ShapeShifterPtr MessageFactory::deserialize(
     }
     
     try {
+        LOG_DEBUGF("Deserializing %zu bytes as type %s", 
+                  data.size(), message_type.c_str());
+        
         // 创建 ShapeShifter
         auto shape_shifter = boost::make_shared<topic_tools::ShapeShifter>();
         
-        // 从缓存或参数获取类型信息
-        std::string actual_type = message_type;
-        std::string actual_md5 = md5sum;
-        std::string actual_def = message_definition;
-        
-        // 如果没有提供类型信息，尝试从缓存获取
-        if (actual_type.empty() || actual_md5.empty()) {
-            // 这里需要根据话题名查找，但我们现在没有话题名
-            // 所以必须要求调用者提供类型信息
-            LOG_ERROR("Message type information is required for deserialization");
-            return nullptr;
-        }
-        
         // 设置消息类型信息
-        shape_shifter->morph(actual_md5, actual_type, actual_def, "");
+        shape_shifter->morph(md5sum, message_type, message_definition, "");
         
         // 反序列化消息数据
         ros::serialization::IStream stream(const_cast<uint8_t*>(data.data()), data.size());
         ros::serialization::deserialize(stream, *shape_shifter);
         
+        LOG_DEBUGF("Successfully deserialized message of type %s", 
+                  message_type.c_str());
+        
         return shape_shifter;
     } catch (const std::exception& e) {
-        LOG_ERRORF("Failed to deserialize message: %s", e.what());
+        LOG_ERRORF("Failed to deserialize message of type %s: %s", 
+                  message_type.c_str(), e.what());
         return nullptr;
     }
 }

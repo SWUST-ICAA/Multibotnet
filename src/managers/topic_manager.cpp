@@ -342,6 +342,9 @@ void TopicManager::handleTopicMessage(SendTopicInfo* info,
             // 直接发送
             if (!info->transport->send(data_to_send)) {
                 LOG_ERROR("Failed to send message on topic " + info->config.topic);
+            } else {
+                LOG_DEBUGF("Sent message on topic %s, size: %zu bytes", 
+                          info->config.topic.c_str(), data_to_send.size());
             }
         }
         
@@ -414,12 +417,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->first_message = true;
         info->has_advertised = false;
         
-        // 提前创建发布者，使用配置中的消息类型
-        info->publisher = message_factory_->createPublisher(
-            config.topic,
-            config.message_type,
-            10
-        );
+        // 不要提前创建发布者，等收到第一条消息再创建
+        // info->publisher 保持为空
         
         // 创建ZMQ传输
         info->transport = std::make_shared<ZmqTransport>(
@@ -450,8 +449,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 订阅所有消息
         info->transport->subscribe("");
         
-        // 增加延迟时间，确保订阅生效
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // 增加延迟时间，确保订阅生效（这是ZMQ PUB-SUB模式的特性）
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         
         // 启动接收线程
         info->recv_thread = std::thread(
@@ -470,6 +469,8 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
     static std::unordered_set<std::string> logged_topics;
     static std::mutex log_mutex;
     
+    LOG_DEBUGF("Starting receive loop for topic %s", info->config.topic.c_str());
+    
     while (info->active && running_ && ros::ok()) {
         try {
             // 接收数据
@@ -477,6 +478,8 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
             if (!info->transport->receive(data, 100)) {  // 100ms超时
                 continue;
             }
+            
+            LOG_DEBUGF("Received %zu bytes on topic %s", data.size(), info->config.topic.c_str());
             
             // 首次接收时打印日志
             if (info->first_message) {
@@ -497,11 +500,16 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+    
+    LOG_DEBUGF("Exiting receive loop for topic %s", info->config.topic.c_str());
 }
 
 void TopicManager::processReceivedMessage(RecvTopicInfo* info, 
                                         const std::vector<uint8_t>& data) {
     try {
+        LOG_DEBUGF("Processing message for topic %s, size: %zu", 
+                  info->config.topic.c_str(), data.size());
+                  
         // 解压消息（如果需要）
         std::vector<uint8_t> decompressed;
         if (CompressionManager::hasCompressionHeader(data)) {
@@ -510,6 +518,8 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
                 LOG_ERROR("Failed to decompress message");
                 return;
             }
+            LOG_DEBUGF("Decompressed message from %zu to %zu bytes", 
+                      data.size(), decompressed.size());
         } else {
             decompressed = data;
         }
@@ -534,6 +544,8 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
         std::string msg_type(decompressed.begin() + offset, 
                             decompressed.begin() + offset + type_len);
         offset += type_len;
+        
+        LOG_DEBUGF("Message type: %s", msg_type.c_str());
         
         // 读取MD5长度
         if (decompressed.size() < offset + 4) {
@@ -574,6 +586,8 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
         // 提取消息数据
         std::vector<uint8_t> msg_data(decompressed.begin() + offset, decompressed.end());
         
+        LOG_DEBUGF("Message data size: %zu bytes", msg_data.size());
+        
         // 反序列化消息
         auto shape_shifter_msg = message_factory_->deserialize(
             msg_data,
@@ -608,6 +622,7 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
         // 发布消息
         if (info->publisher) {
             info->publisher.publish(shape_shifter_msg);
+            LOG_DEBUGF("Published message on topic %s", info->config.topic.c_str());
         }
         
     } catch (const std::exception& e) {
