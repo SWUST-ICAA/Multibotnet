@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     }
     
     // 延时启动（给话题节点时间启动）
-    ros::Duration(0.2).sleep();
+    ros::Duration(0.5).sleep();
     
     // 打印启动横幅
     std::cout << CYAN

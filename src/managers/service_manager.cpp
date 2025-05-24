@@ -193,22 +193,35 @@ bool ServiceManager::loadConfig(const std::string& config_file) {
 }
 
 void ServiceManager::displayConfig() {
+    // 使用字符串流收集所有输出
+    std::stringstream ss;
+    
+    // 添加空行分隔
+    ss << std::endl;
+    
+    ss << BLUE << "=========== Service Node Configuration ===========" << RESET << std::endl;
+    
     // 显示提供服务
-    std::cout << BLUE << "-------provide_services-------" << RESET << std::endl;
+    ss << BLUE << "Provide Services:" << RESET << std::endl;
     for (const auto& provide_service : provide_services_) {
         const auto& config = provide_service->config;
         std::string address_key = (config.address == "*") ? "self" : config.address;
-        std::cout << GREEN << config.service_name << " (bind at " 
-                  << address_key << ":" << config.port << ")" << RESET << std::endl;
+        ss << "  " << GREEN << config.service_name << RESET 
+           << " bind: " << address_key << ":" << config.port << std::endl;
     }
     
     // 显示请求服务
-    std::cout << BLUE << "-------request_services-------" << RESET << std::endl;
+    ss << std::endl << BLUE << "Request Services:" << RESET << std::endl;
     for (const auto& pair : request_services_) {
         const auto& config = pair.second->config;
-        std::cout << GREEN << config.service_name << " (connect to " 
-                  << config.address << ":" << config.port << ")" << RESET << std::endl;
+        ss << "  " << GREEN << config.service_name << RESET 
+           << " -> " << config.address << ":" << config.port << std::endl;
     }
+    
+    ss << BLUE << "=================================================" << RESET << std::endl;
+    
+    // 原子化输出所有内容
+    std::cout << ss.str() << std::flush;
 }
 
 std::string ServiceManager::resolveAddress(const std::string& address_key) {

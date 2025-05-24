@@ -38,6 +38,12 @@ void TopicManager::start() {
     
     running_ = true;
     
+    // 如果有接收话题，等待一小段时间让 ZMQ 订阅生效
+    if (!recv_topics_.empty()) {
+        LOG_INFO("Waiting for ZMQ subscriptions to take effect...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));  // 只需要500ms
+    }
+    
     // 启动所有接收线程（必须在 running_ = true 之后）
     for (auto& recv_topic : recv_topics_) {
         if (!recv_topic->recv_thread.joinable()) {
@@ -195,14 +201,21 @@ bool TopicManager::loadConfig(const std::string& config_file) {
 }
 
 void TopicManager::displayConfig() {
+    // 在 init() 函数调用后立即显示配置，不需要等待
+    std::stringstream ss;
+    
+    // 添加空行分隔
+    ss << std::endl;
+    
     // 显示 IP 映射
-    std::cout << BLUE << "-------------IP------------" << RESET << std::endl;
+    ss << BLUE << "============ Topic Node Configuration ============" << RESET << std::endl;
+    ss << BLUE << "IP Mappings:" << RESET << std::endl;
     for (const auto& pair : ip_map_) {
-        std::cout << YELLOW << pair.first << " : " << pair.second << RESET << std::endl;
+        ss << "  " << YELLOW << pair.first << " -> " << pair.second << RESET << std::endl;
     }
     
     // 显示发送话题
-    std::cout << BLUE << "--------send topics--------" << RESET << std::endl;
+    ss << std::endl << BLUE << "Send Topics:" << RESET << std::endl;
     for (const auto& send_topic : send_topics_) {
         const auto& config = send_topic->config;
         std::string display_ip = resolveAddress(config.address);
@@ -210,18 +223,23 @@ void TopicManager::displayConfig() {
             display_ip = getLocalIP();
         }
         
-        std::cout << GREEN << config.topic << "  " << config.max_frequency 
-                  << "Hz(max_frequency)  bind_port: " 
-                  << display_ip << ":" << config.port << RESET << std::endl;
+        ss << "  " << GREEN << config.topic << RESET 
+           << " [" << config.max_frequency << "Hz max] " 
+           << "bind: " << display_ip << ":" << config.port << std::endl;
     }
     
     // 显示接收话题
-    std::cout << BLUE << "-------receive topics------" << RESET << std::endl;
+    ss << std::endl << BLUE << "Receive Topics:" << RESET << std::endl;
     for (const auto& recv_topic : recv_topics_) {
         const auto& config = recv_topic->config;
-        std::cout << GREEN << config.topic << "  (IP from " 
-                  << config.address << ":" << config.port << ")" << RESET << std::endl;
+        ss << "  " << GREEN << config.topic << RESET 
+           << " <- " << config.address << ":" << config.port << std::endl;
     }
+    
+    ss << BLUE << "=================================================" << RESET << std::endl;
+    
+    // 原子化输出所有内容
+    std::cout << ss.str() << std::flush;
 }
 
 std::string TopicManager::resolveAddress(const std::string& address_key) {
@@ -493,8 +511,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 订阅所有消息
         info->transport->subscribe("");
         
-        // 增加延迟时间，确保订阅生效（这是ZMQ PUB-SUB模式的特性）
-        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        // 移除这里的延迟！
+        // std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         
         // 不在这里启动接收线程，而是在start()函数中启动
         
@@ -511,8 +529,8 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
     static std::unordered_set<std::string> logged_topics;
     static std::mutex log_mutex;
     
-    // 等待一下确保系统准备好
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // 减少等待时间
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 从500ms减少到100ms
     
     while (info->active && running_ && ros::ok()) {
         try {
