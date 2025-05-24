@@ -1,10 +1,10 @@
 <launch>
     <!-- 配置文件参数 -->
-    <arg name="config_file" default="$(find multibotnet)/config/default.yaml"/>
+    <arg name="config_file" default="$(find multibotnet)/config/test_local.yaml"/>
     
     <!-- 是否打印统计信息 -->
-    <arg name="print_statistics" default="false"/>
-    <arg name="statistics_interval" default="5.0"/>
+    <arg name="print_statistics" default="fasle"/>
+    <arg name="statistics_interval" default="5"/>
     
     <!-- 日志级别 -->
     <arg name="log_level" default="info"/>

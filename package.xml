@@ -1,31 +1,64 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>multibotnet</name>
-  <version>3.2.6</version>
-  <description>A ROS package for distributed communication using ZeroMQ</description>
-  <maintainer email="nanwan2004@126.com">Your Name</maintainer>
+  <version>4.0.0</version>
+  <description>
+    A high-performance ROS package for distributed multi-robot communication using ZeroMQ.
+    Features dynamic message/service type support, compression, batching, connection pooling,
+    and advanced load balancing capabilities.
+  </description>
+  
+  <maintainer email="nanwan2004@126.com">MultibotNet Team</maintainer>
+  
   <license>Apache-2.0</license>
-
+  
+  <url type="website">https://github.com/SWUST-ICAA/Multibotnet</url>
+  <url type="repository">https://github.com/SWUST-ICAA/Multibotnet</url>
+  <url type="bugtracker">https://github.com/SWUST-ICAA/Multibotnet</url>
+  
+  <author email="nanwan2004@126.com">MultibotNet Team</author>
+  
+  <!-- Build tool dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
+  
+  <!-- Build dependencies -->
   <build_depend>roscpp</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>std_srvs</build_depend>
+  <build_depend>topic_tools</build_depend>
+  <build_depend>roslib</build_depend>
+  
+  <!-- Build export dependencies -->
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>geometry_msgs</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>nav_msgs</build_export_depend>
   <build_export_depend>std_srvs</build_export_depend>
+  <build_export_depend>topic_tools</build_export_depend>
+  <build_export_depend>roslib</build_export_depend>
+  
+  <!-- Execution dependencies -->
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
-
+  <exec_depend>topic_tools</exec_depend>
+  <exec_depend>roslib</exec_depend>
+  
+  <!-- System dependencies -->
   <depend>libzmq3-dev</depend>
   <depend>yaml-cpp</depend>
+  
+  <!-- Documentation -->
+  <doc_depend>doxygen</doc_depend>
+  
+  <export>
+    <!-- Plugin description for any ROS tools -->
+  </export>
 </package>
