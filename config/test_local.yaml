@@ -15,8 +15,8 @@ send_topics:
     max_frequency: 50
     bind_address: self
     port: 3001
-    compression: false        # 测试时关闭压缩
-    batch: false             # 测试时关闭批处理
+    compression: true        # 测试时关闭压缩
+    batch: true             # 测试时关闭批处理
 
   # 速度命令
   - topic: /cmd_vel
@@ -24,8 +24,8 @@ send_topics:
     max_frequency: 40
     bind_address: self
     port: 3002
-    compression: false
-    batch: false
+    compression: true
+    batch: true
 
   # 激光雷达数据
   - topic: /scan
@@ -34,7 +34,7 @@ send_topics:
     bind_address: self
     port: 3003
     compression: true
-    batch: false
+    batch: true
 
 # 接收话题配置（通过localhost接收，模拟从其他机器人接收）
 recv_topics:

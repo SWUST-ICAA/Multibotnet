@@ -530,7 +530,7 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
     static std::mutex log_mutex;
     
     // 减少等待时间
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 从500ms减少到100ms
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     
     while (info->active && running_ && ros::ok()) {
         try {
@@ -551,13 +551,138 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
                 info->first_message = false;
             }
             
-            // 处理接收到的消息
-            processReceivedMessage(info, data);
+            // 检查是否是批处理消息
+            if (isBatchMessage(data)) {
+                // 处理批处理消息
+                processBatchMessage(info, data);
+            } else {
+                // 处理单个消息
+                processReceivedMessage(info, data);
+            }
             
         } catch (const std::exception& e) {
             LOG_ERROR("Error in recv loop for " + info->config.topic + ": " + e.what());
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+    }
+}
+
+// 添加新函数：检查是否是批处理消息
+bool TopicManager::isBatchMessage(const std::vector<uint8_t>& data) {
+    // 批处理消息的特征：
+    // 1. 至少有4字节（消息数量）
+    // 2. 第一个uint32表示的消息数量要合理（比如1-1000之间）
+    
+    if (data.size() < 4) {
+        return false;
+    }
+    
+    // 检查是否有压缩头部
+    std::vector<uint8_t> decompressed;
+    const std::vector<uint8_t>* check_data = &data;
+    
+    if (CompressionManager::hasCompressionHeader(data)) {
+        decompressed = compression_manager_->decompressWithHeader(data);
+        if (decompressed.empty()) {
+            return false;
+        }
+        check_data = &decompressed;
+    }
+    
+    // 读取可能的消息数量
+    uint32_t msg_count;
+    memcpy(&msg_count, check_data->data(), 4);
+    
+    // 批处理消息通常不会有太多消息
+    if (msg_count > 0 && msg_count <= 1000) {
+        // 进一步验证：检查后续数据是否符合批处理格式
+        size_t offset = 4;
+        for (uint32_t i = 0; i < msg_count && offset + 4 <= check_data->size(); i++) {
+            uint32_t msg_size;
+            memcpy(&msg_size, check_data->data() + offset, 4);
+            offset += 4;
+            
+            // 单个消息大小应该合理
+            if (msg_size == 0 || msg_size > 10 * 1024 * 1024) {  // 10MB上限
+                return false;
+            }
+            
+            offset += msg_size;
+        }
+        
+        // 如果offset正好等于数据大小，说明是批处理消息
+        return offset == check_data->size();
+    }
+    
+    return false;
+}
+
+// 添加新函数：处理批处理消息
+void TopicManager::processBatchMessage(RecvTopicInfo* info, 
+                                      const std::vector<uint8_t>& batch_data) {
+    try {
+        // 解压消息（如果需要）
+        std::vector<uint8_t> decompressed;
+        const std::vector<uint8_t>* data_ptr = &batch_data;
+        
+        if (CompressionManager::hasCompressionHeader(batch_data)) {
+            decompressed = compression_manager_->decompressWithHeader(batch_data);
+            if (decompressed.empty()) {
+                LOG_ERROR("Failed to decompress batch message");
+                return;
+            }
+            data_ptr = &decompressed;
+        }
+        
+        const std::vector<uint8_t>& data = *data_ptr;
+        
+        if (data.size() < 4) {
+            LOG_ERROR("Invalid batch data size");
+            return;
+        }
+        
+        // 读取消息数量
+        uint32_t msg_count;
+        memcpy(&msg_count, data.data(), 4);
+        
+        size_t offset = 4;
+        size_t processed = 0;
+        
+        // 解析每个消息
+        while (offset < data.size() && processed < msg_count) {
+            if (offset + 4 > data.size()) {
+                LOG_ERROR("Invalid batch format: incomplete message size");
+                break;
+            }
+            
+            // 读取消息大小
+            uint32_t msg_size;
+            memcpy(&msg_size, data.data() + offset, 4);
+            offset += 4;
+            
+            if (offset + msg_size > data.size()) {
+                LOG_ERROR("Invalid batch format: incomplete message data");
+                break;
+            }
+            
+            // 提取单个消息
+            std::vector<uint8_t> single_msg(data.begin() + offset, 
+                                           data.begin() + offset + msg_size);
+            
+            // 处理单个消息
+            processReceivedMessage(info, single_msg);
+            
+            offset += msg_size;
+            processed++;
+        }
+        
+        if (processed != msg_count) {
+            LOG_WARNF("Batch processing incomplete: expected %u messages, processed %zu",
+                     msg_count, processed);
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error processing batch message: " + std::string(e.what()));
     }
 }
 

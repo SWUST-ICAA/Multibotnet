@@ -116,6 +116,10 @@ private:
     std::vector<uint8_t> compressMessage(const std::vector<uint8_t>& data, 
                                         CompressionType type);
     std::vector<uint8_t> decompressMessage(const std::vector<uint8_t>& data);
+
+    // 批处理相关函数
+    bool isBatchMessage(const std::vector<uint8_t>& data);
+    void processBatchMessage(RecvTopicInfo* info, const std::vector<uint8_t>& batch_data);
 };
 
 } // namespace multibotnet
