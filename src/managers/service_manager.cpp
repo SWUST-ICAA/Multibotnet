@@ -327,7 +327,7 @@ void ServiceManager::serviceProviderLoop(ProvideServiceInfo* info) {
                 continue;
             }
             
-            LOG_INFOF("Received request for %s (%zu bytes)", 
+            LOG_DEBUGF("Received request for %s (%zu bytes)", 
                      info->config.service_name.c_str(), request_data.size());
             
             info->stats.messages_received++;
@@ -385,7 +385,7 @@ void ServiceManager::handleServiceRequest(ProvideServiceInfo* info,
         } else {
             info->stats.messages_sent++;
             info->stats.bytes_sent += response_data.size();
-            LOG_INFOF("Service %s handled successfully", info->config.service_name.c_str());
+            LOG_DEBUGF("Service %s handled successfully", info->config.service_name.c_str());
         }
         
     } catch (const std::exception& e) {

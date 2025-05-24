@@ -68,7 +68,7 @@ bool ZmqTransport::connect(const std::string& address) {
         last_address_ = address;
         is_bind_ = false;
         state_ = ConnectionState::CONNECTED;
-        LOG_INFOF("Successfully connected to %s", address.c_str());
+        LOG_DEBUGF("Successfully connected to %s", address.c_str());
         return true;
     } catch (const zmq::error_t& e) {
         state_ = ConnectionState::ERROR;

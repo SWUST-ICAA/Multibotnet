@@ -658,9 +658,6 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
             
             if (info->publisher) {
                 info->has_advertised = true;
-                LOG_INFOF("Created publisher for %s (type: %s)", 
-                    info->config.topic.c_str(),
-                    shape_shifter_msg->getDataType().c_str());
             } else {
                 LOG_ERROR("Failed to create publisher for " + info->config.topic);
                 return;
