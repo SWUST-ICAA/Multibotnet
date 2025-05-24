@@ -108,7 +108,20 @@ void TopicManager::printStatistics() const {
     
     std::cout << BLUE << "========== Topic Statistics ==========" << RESET << std::endl;
     
+    // 分别收集发送和接收的统计信息
+    std::vector<std::pair<std::string, Statistics>> send_stats;
+    std::vector<std::pair<std::string, Statistics>> recv_stats;
+    
     for (const auto& pair : stats) {
+        if (pair.first.find("send:") == 0) {
+            send_stats.push_back(pair);
+        } else if (pair.first.find("recv:") == 0) {
+            recv_stats.push_back(pair);
+        }
+    }
+    
+    // 打印接收统计（只显示接收的数据）
+    for (const auto& pair : recv_stats) {
         const auto& name = pair.first;
         const auto& stat = pair.second;
         
@@ -116,20 +129,33 @@ void TopicManager::printStatistics() const {
             std::chrono::steady_clock::now() - stat.start_time).count();
         
         double msgs_per_sec = elapsed > 0 ? 
-            static_cast<double>(stat.messages_sent + stat.messages_received) / elapsed : 0;
+            static_cast<double>(stat.messages_received) / elapsed : 0;
         
-        double mb_sent = static_cast<double>(stat.bytes_sent) / (1024 * 1024);
         double mb_received = static_cast<double>(stat.bytes_received) / (1024 * 1024);
         
         std::cout << GREEN << name << ":" << RESET << std::endl;
-        std::cout << "  Messages: " << YELLOW << "sent=" << stat.messages_sent 
-                  << ", recv=" << stat.messages_received 
+        std::cout << "  Messages: " << YELLOW << "recv=" << stat.messages_received 
                   << " (" << msgs_per_sec << " msg/s)" << RESET << std::endl;
-        std::cout << "  Data: " << YELLOW << "sent=" << mb_sent << "MB" 
-                  << ", recv=" << mb_received << "MB" << RESET << std::endl;
-        if (stat.errors > 0) {
-            std::cout << RED << "  Errors: " << stat.errors << RESET << std::endl;
-        }
+        std::cout << "  Data: " << YELLOW << "recv=" << mb_received << "MB" << RESET << std::endl;
+    }
+    
+    // 打印发送统计（只显示发送的数据）
+    for (const auto& pair : send_stats) {
+        const auto& name = pair.first;
+        const auto& stat = pair.second;
+        
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - stat.start_time).count();
+        
+        double msgs_per_sec = elapsed > 0 ? 
+            static_cast<double>(stat.messages_sent) / elapsed : 0;
+        
+        double mb_sent = static_cast<double>(stat.bytes_sent) / (1024 * 1024);
+        
+        std::cout << GREEN << name << ":" << RESET << std::endl;
+        std::cout << "  Messages: " << YELLOW << "sent=" << stat.messages_sent 
+                  << " (" << msgs_per_sec << " msg/s)" << RESET << std::endl;
+        std::cout << "  Data: " << YELLOW << "sent=" << mb_sent << "MB" << RESET << std::endl;
     }
     
     std::cout << BLUE << "=====================================" << RESET << std::endl;

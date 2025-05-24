@@ -112,9 +112,6 @@ std::vector<uint8_t> MessageFactory::serialize(const ShapeShifterPtr& msg) {
         // 获取序列化大小
         uint32_t serial_size = ros::serialization::serializationLength(*msg);
         
-        LOG_DEBUGF("Serializing message of type %s, size: %u bytes", 
-                  msg->getDataType().c_str(), serial_size);
-        
         // 分配缓冲区
         std::vector<uint8_t> buffer(serial_size);
         
@@ -141,9 +138,6 @@ MessageFactory::ShapeShifterPtr MessageFactory::deserialize(
     }
     
     try {
-        LOG_DEBUGF("Deserializing %zu bytes as type %s", 
-                  data.size(), message_type.c_str());
-        
         // 创建 ShapeShifter
         auto shape_shifter = boost::make_shared<topic_tools::ShapeShifter>();
         
@@ -153,9 +147,6 @@ MessageFactory::ShapeShifterPtr MessageFactory::deserialize(
         // 反序列化消息数据
         ros::serialization::IStream stream(const_cast<uint8_t*>(data.data()), data.size());
         ros::serialization::deserialize(stream, *shape_shifter);
-        
-        LOG_DEBUGF("Successfully deserialized message of type %s", 
-                  message_type.c_str());
         
         return shape_shifter;
     } catch (const std::exception& e) {

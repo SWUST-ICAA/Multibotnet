@@ -101,6 +101,64 @@ std::unordered_map<std::string, Statistics> ServiceManager::getStatistics() cons
     return stats;
 }
 
+void ServiceManager::printStatistics() const {
+    auto stats = getStatistics();
+    
+    std::cout << BLUE << "========= Service Statistics =========" << RESET << std::endl;
+    
+    // 分别收集提供和请求的统计信息
+    std::vector<std::pair<std::string, Statistics>> provide_stats;
+    std::vector<std::pair<std::string, Statistics>> request_stats;
+    
+    for (const auto& pair : stats) {
+        if (pair.first.find("provide:") == 0) {
+            provide_stats.push_back(pair);
+        } else if (pair.first.find("request:") == 0) {
+            request_stats.push_back(pair);
+        }
+    }
+    
+    // 打印请求服务统计（只显示发送的调用）
+    for (const auto& pair : request_stats) {
+        const auto& name = pair.first;
+        const auto& stat = pair.second;
+        
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - stat.start_time).count();
+        
+        double calls_per_sec = elapsed > 0 ? 
+            static_cast<double>(stat.messages_sent) / elapsed : 0;
+        
+        std::cout << GREEN << name << ":" << RESET << std::endl;
+        std::cout << "  Calls: " << YELLOW << "sent=" << stat.messages_sent 
+                  << " (" << calls_per_sec << " calls/s)" << RESET << std::endl;
+        if (stat.errors > 0) {
+            std::cout << RED << "  Errors: " << stat.errors << RESET << std::endl;
+        }
+    }
+    
+    // 打印提供服务统计（只显示接收的调用）
+    for (const auto& pair : provide_stats) {
+        const auto& name = pair.first;
+        const auto& stat = pair.second;
+        
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - stat.start_time).count();
+        
+        double calls_per_sec = elapsed > 0 ? 
+            static_cast<double>(stat.messages_received) / elapsed : 0;
+        
+        std::cout << GREEN << name << ":" << RESET << std::endl;
+        std::cout << "  Calls: " << YELLOW << "recv=" << stat.messages_received 
+                  << " (" << calls_per_sec << " calls/s)" << RESET << std::endl;
+        if (stat.errors > 0) {
+            std::cout << RED << "  Errors: " << stat.errors << RESET << std::endl;
+        }
+    }
+    
+    std::cout << BLUE << "=====================================" << RESET << std::endl;
+}
+
 bool ServiceManager::loadConfig(const std::string& config_file) {
     try {
         ConfigParser parser;

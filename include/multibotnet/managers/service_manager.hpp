@@ -60,6 +60,11 @@ public:
      * @return 统计数据
      */
     std::unordered_map<std::string, Statistics> getStatistics() const;
+
+    /**
+     * @brief 打印服务统计信息
+     */
+    void printStatistics() const;
     
 private:
     // 提供服务信息

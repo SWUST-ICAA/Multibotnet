@@ -33,34 +33,8 @@ void signalHandler(int sig) {
 void printServiceStatistics() {
     if (!g_service_manager) return;
     
-    auto stats = g_service_manager->getStatistics();
-    
-    std::cout << BLUE << "========= Service Statistics =========" 
-              << RESET << std::endl;
-    
-    for (const auto& pair : stats) {
-        const auto& name = pair.first;
-        const auto& stat = pair.second;
-        
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::steady_clock::now() - stat.start_time).count();
-        
-        double calls_per_sec = elapsed > 0 ? 
-            static_cast<double>(stat.messages_sent + stat.messages_received) / 2 / elapsed : 0;
-        
-        std::cout << GREEN << name << ":" << RESET << std::endl;
-        std::cout << "  Calls: " << YELLOW 
-                  << "sent=" << stat.messages_sent 
-                  << ", recv=" << stat.messages_received 
-                  << " (" << calls_per_sec << " calls/s)" << RESET << std::endl;
-        if (stat.errors > 0) {
-            std::cout << RED << "  Errors: " << stat.errors 
-                      << RESET << std::endl;
-        }
-    }
-    
-    std::cout << BLUE << "=====================================" 
-              << RESET << std::endl;
+    // 使用新的 printStatistics 方法
+    g_service_manager->printStatistics();
 }
 
 int main(int argc, char** argv) {
