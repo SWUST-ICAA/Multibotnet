@@ -91,9 +91,9 @@ int main(int argc, char** argv) {
             double stats_interval = 5.0;  // 默认5秒
             nh.param("statistics_interval", stats_interval, 5.0);
             
-            // 首先创建一个延迟定时器，确保服务统计在话题统计之后输出
+            // 修改：将服务统计的延迟改为5.5秒，确保在话题统计之后
             g_initial_delay_timer = nh.createTimer(
-                ros::Duration(2.5),  // 延迟2.5秒开始
+                ros::Duration(5.5),  // 延迟5.5秒开始，确保在话题统计（5秒）之后
                 [&nh, stats_interval](const ros::TimerEvent&) {
                     // 停止初始延迟定时器
                     g_initial_delay_timer.stop();

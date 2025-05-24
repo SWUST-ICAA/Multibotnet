@@ -91,7 +91,7 @@ public:
     }
     
 private:
-    Logger() : level_(LogLevel::DEBUG), color_enabled_(true) {}  // 默认设置为DEBUG级别
+    Logger() : level_(LogLevel::INFO), color_enabled_(true) {}  // 默认设置为INFO级别，不显示DEBUG
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
     
@@ -103,12 +103,12 @@ private:
     std::string levelToColor(LogLevel level) const;
 };
 
-// 宏定义，自动添加文件名和行号
-#define LOG_DEBUG(msg) multibotnet::Logger::getInstance().debug(msg, __FILE__, __LINE__)
-#define LOG_INFO(msg) multibotnet::Logger::getInstance().info(msg, __FILE__, __LINE__)
-#define LOG_WARN(msg) multibotnet::Logger::getInstance().warn(msg, __FILE__, __LINE__)
-#define LOG_ERROR(msg) multibotnet::Logger::getInstance().error(msg, __FILE__, __LINE__)
-#define LOG_FATAL(msg) multibotnet::Logger::getInstance().fatal(msg, __FILE__, __LINE__)
+// 宏定义，自动添加文件名和行号 - 修改为不传递文件名和行号
+#define LOG_DEBUG(msg) multibotnet::Logger::getInstance().debug(msg)
+#define LOG_INFO(msg) multibotnet::Logger::getInstance().info(msg)
+#define LOG_WARN(msg) multibotnet::Logger::getInstance().warn(msg)
+#define LOG_ERROR(msg) multibotnet::Logger::getInstance().error(msg)
+#define LOG_FATAL(msg) multibotnet::Logger::getInstance().fatal(msg)
 
 #define LOG_DEBUGF(fmt, ...) multibotnet::Logger::getInstance().logf(multibotnet::LogLevel::DEBUG, fmt, ##__VA_ARGS__)
 #define LOG_INFOF(fmt, ...) multibotnet::Logger::getInstance().logf(multibotnet::LogLevel::INFO, fmt, ##__VA_ARGS__)

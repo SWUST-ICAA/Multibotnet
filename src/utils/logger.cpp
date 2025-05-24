@@ -39,7 +39,8 @@ void Logger::log(LogLevel level, const std::string& msg,
         ss << " [" << levelToString(level) << "]";
     }
     
-    // 文件和行号（如果提供）
+    // 文件和行号（如果提供）- 注释掉这部分，不再显示文件名和行号
+    /*
     if (!file.empty() && line > 0) {
         // 只显示文件名，不显示完整路径
         size_t pos = file.find_last_of("/\\");
@@ -47,6 +48,7 @@ void Logger::log(LogLevel level, const std::string& msg,
                               file.substr(pos + 1) : file;
         ss << " [" << filename << ":" << line << "]";
     }
+    */
     
     // 消息内容
     ss << " " << msg;

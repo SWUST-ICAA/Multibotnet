@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
             double stats_interval = 5.0;  // 默认5秒
             nh.param("statistics_interval", stats_interval, 5.0);
             
-            // 为了避免和服务统计输出冲突，延迟0.1秒开始
+            // 修改：首次打印延迟5秒，之后每隔stats_interval秒打印一次
             g_stats_timer = nh.createTimer(
                 ros::Duration(stats_interval),
                 [](const ros::TimerEvent&) {
