@@ -3,15 +3,15 @@
 
 """
 Multibotnet v4.0.0 话题测试脚本
-测试话题的发送和接收功能
+用于测试话题通信功能
 """
 
 import rospy
-import time
-import sys
-import threading
 from sensor_msgs.msg import Imu, LaserScan
-from geometry_msgs.msg import Twist, Vector3
+from geometry_msgs.msg import Twist, Vector3, Quaternion
+from std_msgs.msg import Header
+import math
+import time
 
 # ANSI颜色代码
 RESET = "\033[0m"
@@ -22,328 +22,183 @@ BLUE = "\033[34m"
 PURPLE = "\033[35m"
 CYAN = "\033[36m"
 
-class TopicTest:
+class TopicTester:
     def __init__(self):
-        rospy.init_node('multibotnet_topic_test', anonymous=True)
+        rospy.init_node('multibotnet_topic_tester')
+        
+        # 发布者 - 发布原始话题
+        self.imu_pub = rospy.Publisher('/imu', Imu, queue_size=10)
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.scan_pub = rospy.Publisher('/scan', LaserScan, queue_size=10)
+        
+        # 订阅者 - 订阅通过multibotnet转发的话题
+        self.imu_sub = rospy.Subscriber('/topic_test/imu', Imu, self.imu_callback)
+        self.cmd_vel_sub = rospy.Subscriber('/topic_test/cmd_vel', Twist, self.cmd_vel_callback)
+        self.scan_sub = rospy.Subscriber('/topic_test/scan', LaserScan, self.scan_callback)
         
         # 统计信息
-        self.sent = {
-            '/imu': 0,
-            '/cmd_vel': 0,
-            '/scan': 0
-        }
-        self.received = {
-            '/topic_test/imu': 0,
-            '/topic_test/cmd_vel': 0,
-            '/topic_test/scan': 0
-        }
+        self.sent_count = {'imu': 0, 'cmd_vel': 0, 'scan': 0}
+        self.recv_count = {'imu': 0, 'cmd_vel': 0, 'scan': 0}
+        self.last_recv_time = {'imu': None, 'cmd_vel': None, 'scan': None}
         
-        # 延迟统计
-        self.latencies = {
-            'imu': [],
-            'cmd_vel': [],
-            'scan': []
-        }
+        # 测试数据验证
+        self.test_seq = 0
         
-        # 消息时间戳记录
-        self.msg_timestamps = {}
-        self.lock = threading.Lock()
+        print(CYAN + "\n========== Multibotnet Topic Tester ==========" + RESET)
+        print("Testing topic communication through Multibotnet")
+        print("Publishing to: /imu, /cmd_vel, /scan")
+        print("Subscribing to: /topic_test/imu, /topic_test/cmd_vel, /topic_test/scan")
+        print(CYAN + "=============================================" + RESET + "\n")
         
-        # 创建发布者
-        self.pub_imu = rospy.Publisher('/imu', Imu, queue_size=10)
-        self.pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.pub_scan = rospy.Publisher('/scan', LaserScan, queue_size=10)
-        
-        # 创建订阅者
-        self.sub_imu = rospy.Subscriber('/topic_test/imu', Imu, self.imu_callback)
-        self.sub_cmd_vel = rospy.Subscriber('/topic_test/cmd_vel', Twist, self.cmd_vel_callback)
-        self.sub_scan = rospy.Subscriber('/topic_test/scan', LaserScan, self.scan_callback)
-        
-        print(CYAN + "\n╔════════════════════════════════════════════╗" + RESET)
-        print(CYAN + "║      Multibotnet Topic Test v4.0.0         ║" + RESET)
-        print(CYAN + "╚════════════════════════════════════════════╝" + RESET)
-        print(GREEN + "\n✓ Testing topic forwarding through Multibotnet" + RESET)
-        
-        # 等待连接建立
-        print(YELLOW + "\n⏳ Waiting for connections to establish..." + RESET)
-        rospy.sleep(3.0)
-        
-        # 发送预热消息
-        print(YELLOW + "📤 Sending warm-up messages..." + RESET)
-        self.send_warmup_messages()
-        rospy.sleep(1.0)
-        print(GREEN + "✓ System ready for testing\n" + RESET)
-    
-    def send_warmup_messages(self):
-        """发送预热消息，帮助建立ZMQ连接"""
-        for i in range(5):
-            # IMU消息
-            imu_msg = Imu()
-            imu_msg.header.stamp = rospy.Time.now()
-            imu_msg.header.frame_id = "imu_link"
-            imu_msg.linear_acceleration.z = 9.8
-            self.pub_imu.publish(imu_msg)
-            
-            # Twist消息
-            twist_msg = Twist()
-            twist_msg.linear.x = 0.0
-            self.pub_cmd_vel.publish(twist_msg)
-            
-            # LaserScan消息
-            scan_msg = LaserScan()
-            scan_msg.header.stamp = rospy.Time.now()
-            scan_msg.header.frame_id = "laser_frame"
-            scan_msg.ranges = [1.0] * 10
-            self.pub_scan.publish(scan_msg)
-            
-            rospy.sleep(0.1)
-    
     def imu_callback(self, msg):
-        self.received['/topic_test/imu'] += 1
+        self.recv_count['imu'] += 1
+        self.last_recv_time['imu'] = rospy.Time.now()
         
-        # 计算延迟
-        with self.lock:
-            key = f"imu_{msg.header.seq}"
-            if key in self.msg_timestamps:
-                latency = (rospy.Time.now() - self.msg_timestamps[key]).to_sec() * 1000  # ms
-                self.latencies['imu'].append(latency)
-                del self.msg_timestamps[key]
+        # 验证数据
+        expected_seq = int(msg.angular_velocity.x)  # 我们把序列号存在这里
+        if expected_seq == self.sent_count['imu'] - 1:
+            rospy.loginfo_once(GREEN + "✓ IMU data received correctly through Multibotnet!" + RESET)
         
-        if self.received['/topic_test/imu'] == 1:
-            print(GREEN + f"✓ First IMU message received" + RESET)
-    
     def cmd_vel_callback(self, msg):
-        self.received['/topic_test/cmd_vel'] += 1
+        self.recv_count['cmd_vel'] += 1
+        self.last_recv_time['cmd_vel'] = rospy.Time.now()
         
-        # 计算延迟（使用线速度作为标识）
-        with self.lock:
-            key = f"cmd_vel_{msg.linear.x:.6f}"
-            if key in self.msg_timestamps:
-                latency = (rospy.Time.now() - self.msg_timestamps[key]).to_sec() * 1000  # ms
-                self.latencies['cmd_vel'].append(latency)
-                del self.msg_timestamps[key]
+        # 验证数据
+        if abs(msg.linear.x - math.sin(self.recv_count['cmd_vel'] * 0.1)) < 0.001:
+            rospy.loginfo_once(GREEN + "✓ Twist data received correctly through Multibotnet!" + RESET)
         
-        if self.received['/topic_test/cmd_vel'] == 1:
-            print(GREEN + f"✓ First Twist message received" + RESET)
-    
     def scan_callback(self, msg):
-        self.received['/topic_test/scan'] += 1
+        self.recv_count['scan'] += 1
+        self.last_recv_time['scan'] = rospy.Time.now()
         
-        # 计算延迟
-        with self.lock:
-            key = f"scan_{msg.header.seq}"
-            if key in self.msg_timestamps:
-                latency = (rospy.Time.now() - self.msg_timestamps[key]).to_sec() * 1000  # ms
-                self.latencies['scan'].append(latency)
-                del self.msg_timestamps[key]
-        
-        if self.received['/topic_test/scan'] == 1:
-            print(GREEN + f"✓ First LaserScan message received" + RESET)
+        # 验证数据
+        if len(msg.ranges) == 360:
+            rospy.loginfo_once(GREEN + "✓ LaserScan data received correctly through Multibotnet!" + RESET)
     
-    def run_basic_test(self):
-        """基础功能测试"""
-        print(BLUE + "\n▶ Basic Functionality Test" + RESET)
-        print("─" * 40)
+    def publish_test_data(self):
+        """发布测试数据"""
+        rate = rospy.Rate(10)  # 10Hz for all topics
         
-        # 发送测试消息
-        print("Sending test messages...")
-        
-        # IMU消息
-        imu_msg = Imu()
-        imu_msg.header.stamp = rospy.Time.now()
-        imu_msg.header.seq = 1000
-        imu_msg.header.frame_id = "imu_link"
-        imu_msg.linear_acceleration.x = 0.1
-        imu_msg.linear_acceleration.y = 0.2
-        imu_msg.linear_acceleration.z = 9.8
-        
-        with self.lock:
-            self.msg_timestamps[f"imu_{imu_msg.header.seq}"] = rospy.Time.now()
-        self.pub_imu.publish(imu_msg)
-        self.sent['/imu'] += 1
-        print(f"  • IMU message sent (seq={imu_msg.header.seq})")
-        
-        # Twist消息
-        twist_msg = Twist()
-        twist_msg.linear.x = 1.5
-        twist_msg.angular.z = 0.5
-        
-        with self.lock:
-            self.msg_timestamps[f"cmd_vel_{twist_msg.linear.x:.6f}"] = rospy.Time.now()
-        self.pub_cmd_vel.publish(twist_msg)
-        self.sent['/cmd_vel'] += 1
-        print(f"  • Twist message sent (linear.x={twist_msg.linear.x})")
-        
-        # LaserScan消息
-        scan_msg = LaserScan()
-        scan_msg.header.stamp = rospy.Time.now()
-        scan_msg.header.seq = 2000
-        scan_msg.header.frame_id = "laser_frame"
-        scan_msg.angle_min = -1.57
-        scan_msg.angle_max = 1.57
-        scan_msg.angle_increment = 0.01
-        scan_msg.ranges = [5.0] * 314
-        
-        with self.lock:
-            self.msg_timestamps[f"scan_{scan_msg.header.seq}"] = rospy.Time.now()
-        self.pub_scan.publish(scan_msg)
-        self.sent['/scan'] += 1
-        print(f"  • LaserScan message sent (seq={scan_msg.header.seq})")
-        
-        # 等待接收
-        print("\nWaiting for messages...")
-        rospy.sleep(2.0)
-        
-        # 检查结果
-        print("\nResults:")
-        for topic in ['/imu', '/cmd_vel', '/scan']:
-            recv_topic = '/topic_test' + topic
-            if self.received[recv_topic] > 0:
-                print(f"  {GREEN}✓{RESET} {topic} → {recv_topic}")
-            else:
-                print(f"  {RED}✗{RESET} {topic} → {recv_topic}")
-    
-    def run_performance_test(self, duration=5.0, rate_hz=20):
-        """性能测试"""
-        print(BLUE + f"\n▶ Performance Test ({rate_hz}Hz, {duration}s)" + RESET)
-        print("─" * 40)
-        
-        rate = rospy.Rate(rate_hz)
-        start_time = rospy.Time.now()
-        seq = 3000
-        
-        while not rospy.is_shutdown() and (rospy.Time.now() - start_time).to_sec() < duration:
-            # IMU消息
+        while not rospy.is_shutdown():
+            current_time = rospy.Time.now()
+            
+            # 发布IMU数据 (每次循环都发)
             imu_msg = Imu()
-            imu_msg.header.stamp = rospy.Time.now()
-            imu_msg.header.seq = seq
+            imu_msg.header.stamp = current_time
             imu_msg.header.frame_id = "imu_link"
-            imu_msg.linear_acceleration.z = 9.8
+            imu_msg.header.seq = self.sent_count['imu']
             
-            with self.lock:
-                self.msg_timestamps[f"imu_{seq}"] = rospy.Time.now()
-            self.pub_imu.publish(imu_msg)
-            self.sent['/imu'] += 1
+            # 存储序列号用于验证
+            imu_msg.angular_velocity.x = float(self.sent_count['imu'])
+            imu_msg.angular_velocity.y = 0.1
+            imu_msg.angular_velocity.z = 0.2
             
-            # Twist消息
+            imu_msg.linear_acceleration.x = 0.0
+            imu_msg.linear_acceleration.y = 0.0
+            imu_msg.linear_acceleration.z = 9.81
+            
+            imu_msg.orientation.x = 0.0
+            imu_msg.orientation.y = 0.0
+            imu_msg.orientation.z = 0.0
+            imu_msg.orientation.w = 1.0
+            
+            self.imu_pub.publish(imu_msg)
+            self.sent_count['imu'] += 1
+            
+            # 发布Twist数据 (每次循环都发)
             twist_msg = Twist()
-            twist_msg.linear.x = 0.001 * seq  # 使用唯一值
+            twist_msg.linear.x = math.sin(self.sent_count['cmd_vel'] * 0.1)
+            twist_msg.linear.y = 0.0
+            twist_msg.linear.z = 0.0
+            twist_msg.angular.x = 0.0
+            twist_msg.angular.y = 0.0
+            twist_msg.angular.z = math.cos(self.sent_count['cmd_vel'] * 0.1) * 0.5
             
-            with self.lock:
-                self.msg_timestamps[f"cmd_vel_{twist_msg.linear.x:.6f}"] = rospy.Time.now()
-            self.pub_cmd_vel.publish(twist_msg)
-            self.sent['/cmd_vel'] += 1
+            self.cmd_vel_pub.publish(twist_msg)
+            self.sent_count['cmd_vel'] += 1
             
-            # LaserScan消息
-            scan_msg = LaserScan()
-            scan_msg.header.stamp = rospy.Time.now()
-            scan_msg.header.seq = seq
-            scan_msg.header.frame_id = "laser_frame"
-            scan_msg.ranges = [5.0] * 100
-            
-            with self.lock:
-                self.msg_timestamps[f"scan_{seq}"] = rospy.Time.now()
-            self.pub_scan.publish(scan_msg)
-            self.sent['/scan'] += 1
-            
-            seq += 1
-            rate.sleep()
-        
-        # 等待最后的消息
-        print(f"Sent {seq - 3000} messages of each type")
-        print("Waiting for remaining messages...")
-        rospy.sleep(2.0)
-    
-    def print_results(self):
-        """打印详细测试结果"""
-        print(CYAN + "\n╔════════════════════════════════════════════╗" + RESET)
-        print(CYAN + "║              Test Results                  ║" + RESET)
-        print(CYAN + "╚════════════════════════════════════════════╝" + RESET)
-        
-        # 消息统计
-        print(BLUE + "\n📊 Message Statistics:" + RESET)
-        print("─" * 40)
-        print(f"{'Topic':<20} {'Sent':<10} {'Received':<10} {'Loss Rate':<10}")
-        print("─" * 40)
-        
-        total_sent = 0
-        total_received = 0
-        
-        for send_topic in self.sent:
-            recv_topic = '/topic_test' + send_topic
-            sent = self.sent[send_topic]
-            received = self.received[recv_topic]
-            loss_rate = ((sent - received) / sent * 100) if sent > 0 else 0
-            
-            total_sent += sent
-            total_received += received
-            
-            color = GREEN if loss_rate < 1 else YELLOW if loss_rate < 5 else RED
-            print(f"{send_topic:<20} {sent:<10} {received:<10} "
-                  f"{color}{loss_rate:.1f}%{RESET}")
-        
-        print("─" * 40)
-        total_loss_rate = ((total_sent - total_received) / total_sent * 100) if total_sent > 0 else 0
-        color = GREEN if total_loss_rate < 1 else YELLOW if total_loss_rate < 5 else RED
-        print(f"{'Total':<20} {total_sent:<10} {total_received:<10} "
-              f"{color}{total_loss_rate:.1f}%{RESET}")
-        
-        # 延迟统计
-        print(BLUE + "\n⏱️  Latency Statistics (ms):" + RESET)
-        print("─" * 40)
-        print(f"{'Topic':<15} {'Min':<8} {'Avg':<8} {'Max':<8} {'Samples':<10}")
-        print("─" * 40)
-        
-        for topic_type, latencies in self.latencies.items():
-            if latencies:
-                min_lat = min(latencies)
-                avg_lat = sum(latencies) / len(latencies)
-                max_lat = max(latencies)
+            # 发布LaserScan数据 (每秒1次，即每10次循环发1次)
+            if self.sent_count['scan'] < self.sent_count['imu'] // 10:
+                scan_msg = LaserScan()
+                scan_msg.header.stamp = current_time
+                scan_msg.header.frame_id = "laser_frame"
+                scan_msg.header.seq = self.sent_count['scan']
                 
-                color = GREEN if avg_lat < 5 else YELLOW if avg_lat < 10 else RED
-                print(f"{topic_type:<15} {min_lat:<8.2f} "
-                      f"{color}{avg_lat:<8.2f}{RESET} "
-                      f"{max_lat:<8.2f} {len(latencies):<10}")
-            else:
-                print(f"{topic_type:<15} {'N/A':<8} {'N/A':<8} {'N/A':<8} {'0':<10}")
+                scan_msg.angle_min = -math.pi
+                scan_msg.angle_max = math.pi
+                scan_msg.angle_increment = math.pi / 180.0
+                scan_msg.time_increment = 0.0
+                scan_msg.scan_time = 0.1
+                scan_msg.range_min = 0.1
+                scan_msg.range_max = 30.0
+                
+                # 生成测试数据
+                scan_msg.ranges = []
+                for i in range(360):
+                    # 创建一个简单的模式
+                    distance = 5.0 + 2.0 * math.sin(i * math.pi / 180.0 * 4)
+                    scan_msg.ranges.append(distance)
+                
+                self.scan_pub.publish(scan_msg)
+                self.sent_count['scan'] += 1
+            
+            rate.sleep()
+    
+    def print_statistics(self):
+        """定期打印统计信息"""
+        rate = rospy.Rate(0.2)  # 每5秒打印一次
         
-        # 总体评估
-        print(BLUE + "\n🎯 Overall Assessment:" + RESET)
-        print("─" * 40)
-        
-        if total_loss_rate == 0 and all(len(l) > 0 for l in self.latencies.values()):
-            avg_latency = sum(sum(l)/len(l) for l in self.latencies.values() if l) / 3
-            if avg_latency < 5:
-                print(GREEN + "✓ EXCELLENT: No message loss, low latency (<5ms)" + RESET)
-            elif avg_latency < 10:
-                print(GREEN + "✓ GOOD: No message loss, acceptable latency (<10ms)" + RESET)
-            else:
-                print(YELLOW + "⚠ FAIR: No message loss, but high latency (>10ms)" + RESET)
-        elif total_loss_rate < 1:
-            print(YELLOW + "⚠ ACCEPTABLE: Minimal message loss (<1%)" + RESET)
-        else:
-            print(RED + "✗ POOR: Significant message loss (>1%)" + RESET)
-        
-        print("\n" + YELLOW + "💡 Run 'rostopic echo' to verify message content" + RESET)
-        print(YELLOW + "💡 Check Multibotnet logs for detailed statistics" + RESET)
+        while not rospy.is_shutdown():
+            rate.sleep()
+            
+            print("\n" + BLUE + "========== Test Statistics ==========" + RESET)
+            
+            for topic in ['imu', 'cmd_vel', 'scan']:
+                sent = self.sent_count[topic]
+                recv = self.recv_count[topic]
+                
+                if sent > 0:
+                    success_rate = (recv / float(sent)) * 100
+                    color = GREEN if success_rate > 95 else YELLOW if success_rate > 80 else RED
+                    
+                    print("{}:".format(topic.upper()))
+                    print("  Sent: {}, Received: {}, Success: {}{}%{}".format(
+                        sent, recv, color, int(success_rate), RESET))
+                    
+                    if self.last_recv_time[topic]:
+                        latency = (rospy.Time.now() - self.last_recv_time[topic]).to_sec()
+                        if latency < 5.0:
+                            print("  Status: {}✓ Active{} (last received {:.1f}s ago)".format(
+                                GREEN, RESET, latency))
+                        else:
+                            print("  Status: {}✗ Inactive{} (no data for {:.1f}s)".format(
+                                RED, RESET, latency))
+            
+            print(BLUE + "=====================================" + RESET)
 
 def main():
     try:
-        tester = TopicTest()
+        tester = TopicTester()
         
-        # 运行测试
-        tester.run_basic_test()
-        tester.run_performance_test(duration=5.0, rate_hz=20)
+        # 等待一下让订阅者准备好
+        rospy.sleep(1.0)
         
-        # 打印结果
-        tester.print_results()
+        # 启动统计打印线程
+        import threading
+        stats_thread = threading.Thread(target=tester.print_statistics)
+        stats_thread.daemon = True
+        stats_thread.start()
+        
+        # 开始发布测试数据
+        print(YELLOW + "\nStarting to publish test data..." + RESET)
+        print("Press Ctrl+C to stop\n")
+        
+        tester.publish_test_data()
         
     except rospy.ROSInterruptException:
-        print(RED + "\n❌ Test interrupted!" + RESET)
+        print("\n" + YELLOW + "Test stopped by user" + RESET)
     except Exception as e:
-        print(RED + f"\n❌ Error: {e}" + RESET)
-        import traceback
-        traceback.print_exc()
+        print(RED + "Error: {}".format(e) + RESET)
 
 if __name__ == '__main__':
     main()
