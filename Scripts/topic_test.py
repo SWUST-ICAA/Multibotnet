@@ -50,6 +50,10 @@ class TopicTest:
         print(CYAN + "\n========== Multibotnet Topic Test ==========" + RESET)
         print(GREEN + "Testing topic forwarding through Multibotnet..." + RESET)
         
+        # 等待订阅者和发布者建立连接
+        print(YELLOW + "\nWaiting for connections to establish..." + RESET)
+        rospy.sleep(1.0)  # 增加等待时间
+        
     def imu_callback(self, msg):
         self.received['/topic_test/imu'] += 1
         if self.received['/topic_test/imu'] == 1:
@@ -166,7 +170,7 @@ class TopicTest:
         if total_success > 0:
             print(BLUE + "\nPerformance:" + RESET)
             for topic in self.sent:
-                recv_topic = topic.replace('/', '/topic_test/', 1)
+                recv_topic = '/topic_test' + topic
                 if recv_topic in self.received and self.sent[topic] > 0:
                     loss_rate = (1 - self.received[recv_topic] / self.sent[topic]) * 100
                     print(f"  {topic} → {recv_topic}: {100-loss_rate:.1f}% delivery rate")
@@ -205,18 +209,18 @@ def main():
         tester = TopicTest()
         
         # 等待系统初始化
-        print(YELLOW + "\nWaiting for system initialization..." + RESET)
-        rospy.sleep(1.0)
+        print(YELLOW + "\nGiving Multibotnet more time to establish connections..." + RESET)
+        rospy.sleep(2.0)  # 增加等待时间
         
         # 基础测试
         print(CYAN + "\n======== Basic Test ========" + RESET)
         tester.publish_test_messages(duration=3.0, rate_hz=10)
-        tester.wait_for_messages(timeout=1.0)
+        tester.wait_for_messages(timeout=2.0)
         
         # 高频测试
         print(CYAN + "\n======== High Frequency Test ========" + RESET)
         tester.publish_test_messages(duration=2.0, rate_hz=20)
-        tester.wait_for_messages(timeout=1.0)
+        tester.wait_for_messages(timeout=2.0)
         
         # 打印结果
         tester.print_results()

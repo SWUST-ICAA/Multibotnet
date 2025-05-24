@@ -412,6 +412,9 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 订阅所有消息
         info->transport->subscribe("");
         
+        // 延迟一小段时间，确保订阅生效（解决慢连接问题）
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
         // 不在这里创建发布者，等待第一条消息到达时创建
         // 这样可以获得正确的消息类型信息
         
@@ -465,54 +468,59 @@ void TopicManager::processReceivedMessage(RecvTopicInfo* info,
                                         const std::vector<uint8_t>& data) {
     try {
         // 检查是否是批处理消息
+        bool is_batch = false;
         if (data.size() >= 4) {
+            // 批处理消息的魔术检查
+            // 批处理格式：[消息数量(4字节)][消息1长度(4字节)][消息1数据]...
             uint32_t msg_count;
             memcpy(&msg_count, data.data(), 4);
             
-            // 简单的批处理检测
-            if (msg_count > 0 && msg_count < 1000 && data.size() > 8) {
-                // 检查是否真的是批处理格式
-                size_t offset = 4;
-                bool is_batch = true;
+            // 合理的批处理消息数量范围检查
+            if (msg_count > 0 && msg_count <= 100 && data.size() > 8) {
+                // 进一步验证：检查第一个消息的长度是否合理
+                uint32_t first_msg_size;
+                memcpy(&first_msg_size, data.data() + 4, 4);
                 
-                // 快速验证第一个消息
-                if (offset + 4 <= data.size()) {
-                    uint32_t first_msg_size;
-                    memcpy(&first_msg_size, data.data() + offset, 4);
-                    if (offset + 4 + first_msg_size > data.size() || first_msg_size == 0) {
-                        is_batch = false;
+                // 如果第一个消息的大小加上头部信息不超过总大小，可能是批处理
+                if (first_msg_size > 0 && 8 + first_msg_size <= data.size()) {
+                    // 再检查是否有压缩头部（避免误判）
+                    if (8 + first_msg_size < data.size() || 
+                        !CompressionManager::hasCompressionHeader(data)) {
+                        is_batch = true;
                     }
-                } else {
-                    is_batch = false;
-                }
-                
-                if (is_batch) {
-                    // 处理批处理消息
-                    offset = 4;
-                    size_t processed = 0;
-                    
-                    while (offset < data.size() && processed < msg_count) {
-                        if (offset + 4 > data.size()) break;
-                        
-                        uint32_t msg_size;
-                        memcpy(&msg_size, data.data() + offset, 4);
-                        offset += 4;
-                        
-                        if (offset + msg_size > data.size()) break;
-                        
-                        std::vector<uint8_t> single_msg(
-                            data.begin() + offset,
-                            data.begin() + offset + msg_size);
-                        
-                        processReceivedMessage(info, single_msg);
-                        
-                        offset += msg_size;
-                        processed++;
-                    }
-                    
-                    return;  // 批处理消息处理完成
                 }
             }
+        }
+        
+        if (is_batch) {
+            // 处理批处理消息
+            uint32_t msg_count;
+            memcpy(&msg_count, data.data(), 4);
+            
+            size_t offset = 4;
+            size_t processed = 0;
+            
+            while (offset < data.size() && processed < msg_count) {
+                if (offset + 4 > data.size()) break;
+                
+                uint32_t msg_size;
+                memcpy(&msg_size, data.data() + offset, 4);
+                offset += 4;
+                
+                if (offset + msg_size > data.size()) break;
+                
+                std::vector<uint8_t> single_msg(
+                    data.begin() + offset,
+                    data.begin() + offset + msg_size);
+                
+                // 递归处理单个消息
+                processReceivedMessage(info, single_msg);
+                
+                offset += msg_size;
+                processed++;
+            }
+            
+            return;  // 批处理消息处理完成
         }
         
         // 解压消息（如果需要）

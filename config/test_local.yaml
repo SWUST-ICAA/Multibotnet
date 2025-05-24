@@ -15,9 +15,8 @@ send_topics:
     max_frequency: 50
     bind_address: self
     port: 3001
-    compression: true
-    batch: true
-    batch_size: 10
+    compression: false        # 测试时关闭压缩
+    batch: false             # 测试时关闭批处理
 
   # 速度命令
   - topic: /cmd_vel
@@ -26,6 +25,7 @@ send_topics:
     bind_address: self
     port: 3002
     compression: false
+    batch: false
 
   # 激光雷达数据
   - topic: /scan
@@ -33,7 +33,7 @@ send_topics:
     max_frequency: 10
     bind_address: self
     port: 3003
-    compression: true
+    compression: false
     batch: false
 
 # 接收话题配置（通过localhost接收，模拟从其他机器人接收）
@@ -90,13 +90,13 @@ request_services:
 advanced:
   # 压缩配置
   compression:
-    enable: true
-    type: lz4                 # 使用LZ4实现高速压缩
+    enable: false            # 测试时关闭全局压缩
+    type: lz4                # 使用LZ4实现高速压缩
     level: 6
 
   # 批处理配置
   batch:
-    enable: true
+    enable: false            # 测试时关闭全局批处理
     size: 10
     timeout_ms: 100
 
