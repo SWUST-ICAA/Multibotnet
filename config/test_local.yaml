@@ -90,13 +90,13 @@ request_services:
 advanced:
   # 压缩配置
   compression:
-    enable: false            # 测试时关闭全局压缩
+    enable: true            # 测试时关闭全局压缩
     type: lz4                # 使用LZ4实现高速压缩
     level: 6
 
   # 批处理配置
   batch:
-    enable: false            # 测试时关闭全局批处理
+    enable: true            # 测试时关闭全局批处理
     size: 10
     timeout_ms: 100
 
