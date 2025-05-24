@@ -79,13 +79,16 @@ int main(int argc, char** argv) {
             double stats_interval = 5.0;  // 默认5秒
             nh.param("statistics_interval", stats_interval, 5.0);
             
+            // 为了避免和服务统计输出冲突，延迟0.1秒开始
             g_stats_timer = nh.createTimer(
                 ros::Duration(stats_interval),
                 [](const ros::TimerEvent&) {
                     if (g_topic_manager) {
                         g_topic_manager->printStatistics();
                     }
-                }
+                },
+                false,  // oneshot = false
+                true    // autostart = true
             );
         }
         

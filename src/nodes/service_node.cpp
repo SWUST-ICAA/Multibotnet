@@ -16,6 +16,7 @@
 namespace {
     std::unique_ptr<multibotnet::ServiceManager> g_service_manager;
     ros::Timer g_stats_timer;
+    ros::Timer g_initial_delay_timer;
 }
 
 // 信号处理函数
@@ -90,11 +91,25 @@ int main(int argc, char** argv) {
             double stats_interval = 5.0;  // 默认5秒
             nh.param("statistics_interval", stats_interval, 5.0);
             
-            g_stats_timer = nh.createTimer(
-                ros::Duration(stats_interval),
-                [](const ros::TimerEvent&) {
+            // 首先创建一个延迟定时器，确保服务统计在话题统计之后输出
+            g_initial_delay_timer = nh.createTimer(
+                ros::Duration(2.5),  // 延迟2.5秒开始
+                [&nh, stats_interval](const ros::TimerEvent&) {
+                    // 停止初始延迟定时器
+                    g_initial_delay_timer.stop();
+                    
+                    // 创建周期性统计定时器
+                    g_stats_timer = nh.createTimer(
+                        ros::Duration(stats_interval),
+                        [](const ros::TimerEvent&) {
+                            printServiceStatistics();
+                        }
+                    );
+                    
+                    // 立即打印一次
                     printServiceStatistics();
-                }
+                },
+                true  // oneshot = true
             );
         }
         
