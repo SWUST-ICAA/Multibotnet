@@ -34,15 +34,26 @@ public:
                                    const SubscriberCallback& callback);
     
     /**
-     * @brief 创建发布者，自动处理任意消息类型
+     * @brief 创建发布者占位符（不会真正创建）
      * @param topic 话题名称
      * @param message_type 消息类型字符串（如 "sensor_msgs/Imu"）
      * @param queue_size 队列大小
-     * @return ROS发布者
+     * @return 空的ROS发布者
      */
     ros::Publisher createPublisher(const std::string& topic,
                                  const std::string& message_type,
                                  uint32_t queue_size = 1);
+    
+    /**
+     * @brief 从ShapeShifter实例创建发布者
+     * @param topic 话题名称
+     * @param msg ShapeShifter消息实例
+     * @param queue_size 队列大小
+     * @return ROS发布者
+     */
+    ros::Publisher createPublisherFromShapeShifter(const std::string& topic,
+                                                  const ShapeShifterPtr& msg,
+                                                  uint32_t queue_size = 1);
     
     /**
      * @brief 序列化ShapeShifter消息

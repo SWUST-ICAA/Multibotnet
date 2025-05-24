@@ -56,28 +56,49 @@ ros::Publisher MessageFactory::createPublisher(const std::string& topic,
         return it->second;
     }
     
-    // 使用 AdvertiseOptions 来避免模板实例化问题
-    ros::AdvertiseOptions ops;
-    ops.topic = topic;
-    ops.queue_size = queue_size;
-    ops.latch = true;
-    
-    // 设置消息类型信息
-    // 注意：对于 ShapeShifter，我们需要在发布时动态设置类型
-    // 这里只是创建一个通用的发布者
-    ops.datatype = message_type;
-    ops.md5sum = "*";  // 通配符，表示接受任何 MD5
-    ops.message_definition = "";
-    ops.has_header = false;
-    
-    ros::Publisher pub = nh_.advertise(ops);
-    
-    publishers_[topic] = pub;
-    
-    LOG_INFOF("Created publisher for topic %s (declared type: %s)", 
+    // 返回一个空的发布者
+    // 实际的发布者将在第一次收到消息时创建
+    LOG_INFOF("Publisher for topic %s will be created on first message (type: %s)", 
              topic.c_str(), message_type.c_str());
     
-    return pub;
+    return ros::Publisher();  // 返回空发布者
+}
+
+ros::Publisher MessageFactory::createPublisherFromShapeShifter(
+    const std::string& topic,
+    const ShapeShifterPtr& msg,
+    uint32_t queue_size) {
+    
+    if (!msg) {
+        LOG_ERROR("Cannot create publisher from null ShapeShifter");
+        return ros::Publisher();
+    }
+    
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // 检查是否已存在
+    auto it = publishers_.find(topic);
+    if (it != publishers_.end()) {
+        return it->second;
+    }
+    
+    try {
+        // 使用 ShapeShifter 的 advertise 方法创建发布者
+        ros::Publisher pub = msg->advertise(nh_, topic, queue_size, true);
+        
+        publishers_[topic] = pub;
+        
+        LOG_INFOF("Created publisher for topic %s (type: %s, md5: %s)", 
+                 topic.c_str(), 
+                 msg->getDataType().c_str(),
+                 msg->getMD5Sum().c_str());
+        
+        return pub;
+    } catch (const std::exception& e) {
+        LOG_ERRORF("Failed to create publisher for topic %s: %s", 
+                  topic.c_str(), e.what());
+        return ros::Publisher();
+    }
 }
 
 std::vector<uint8_t> MessageFactory::serialize(const ShapeShifterPtr& msg) {
@@ -87,41 +108,50 @@ std::vector<uint8_t> MessageFactory::serialize(const ShapeShifterPtr& msg) {
     }
     
     try {
-        // 使用简单的序列化格式
+        // 使用 ROS 序列化直接序列化 ShapeShifter
+        // 首先获取序列化后的大小
+        uint32_t serial_size = ros::serialization::serializationLength(*msg);
+        
+        // 创建缓冲区，包含元数据和消息数据
         std::vector<uint8_t> buffer;
         
-        // 保存消息的关键信息
-        std::string type = msg->getDataType();
-        std::string md5 = msg->getMD5Sum();
-        std::string def = msg->getMessageDefinition();
+        // 获取消息元数据
+        std::string datatype = msg->getDataType();
+        std::string md5sum = msg->getMD5Sum();
+        std::string msg_def = msg->getMessageDefinition();
         
-        // 简单的TLV格式：Type-Length-Value
-        // 格式：[类型长度:4][类型][MD5长度:4][MD5][定义长度:4][定义][消息长度:4][消息数据]
+        // 计算总大小
+        uint32_t total_size = 4 + datatype.size() + 
+                             4 + md5sum.size() + 
+                             4 + msg_def.size() + 
+                             4 + serial_size;
         
-        // 类型
-        uint32_t type_len = type.size();
-        buffer.insert(buffer.end(), (uint8_t*)&type_len, (uint8_t*)&type_len + 4);
-        buffer.insert(buffer.end(), type.begin(), type.end());
+        buffer.reserve(total_size);
         
-        // MD5
-        uint32_t md5_len = md5.size();
+        // 1. 写入数据类型
+        uint32_t datatype_len = datatype.size();
+        buffer.insert(buffer.end(), (uint8_t*)&datatype_len, (uint8_t*)&datatype_len + 4);
+        buffer.insert(buffer.end(), datatype.begin(), datatype.end());
+        
+        // 2. 写入 MD5
+        uint32_t md5_len = md5sum.size();
         buffer.insert(buffer.end(), (uint8_t*)&md5_len, (uint8_t*)&md5_len + 4);
-        buffer.insert(buffer.end(), md5.begin(), md5.end());
+        buffer.insert(buffer.end(), md5sum.begin(), md5sum.end());
         
-        // 定义
-        uint32_t def_len = def.size();
-        buffer.insert(buffer.end(), (uint8_t*)&def_len, (uint8_t*)&def_len + 4);
-        buffer.insert(buffer.end(), def.begin(), def.end());
+        // 3. 写入消息定义
+        uint32_t msg_def_len = msg_def.size();
+        buffer.insert(buffer.end(), (uint8_t*)&msg_def_len, (uint8_t*)&msg_def_len + 4);
+        buffer.insert(buffer.end(), msg_def.begin(), msg_def.end());
         
-        // 消息数据
-        // 获取消息大小
-        uint32_t msg_size = ros::serialization::serializationLength(*msg);
-        buffer.insert(buffer.end(), (uint8_t*)&msg_size, (uint8_t*)&msg_size + 4);
+        // 4. 写入序列化的消息数据
+        buffer.insert(buffer.end(), (uint8_t*)&serial_size, (uint8_t*)&serial_size + 4);
+        
+        // 预分配空间
+        size_t old_size = buffer.size();
+        buffer.resize(old_size + serial_size);
         
         // 序列化消息
-        size_t start_pos = buffer.size();
-        buffer.resize(start_pos + msg_size);
-        ros::serialization::OStream stream(buffer.data() + start_pos, msg_size);
+        ros::serialization::OStream stream(buffer.data() + old_size, serial_size);
         ros::serialization::serialize(stream, *msg);
         
         return buffer;
@@ -137,7 +167,7 @@ MessageFactory::ShapeShifterPtr MessageFactory::deserialize(
     const std::string& md5sum,
     const std::string& message_definition) {
     
-    if (data.size() < 16) {
+    if (data.size() < 16) {  // 至少需要4个长度字段
         LOG_ERROR("Invalid data size for deserialization");
         return nullptr;
     }
@@ -145,48 +175,63 @@ MessageFactory::ShapeShifterPtr MessageFactory::deserialize(
     try {
         size_t offset = 0;
         
-        // 读取类型
-        uint32_t type_len = 0;
-        memcpy(&type_len, data.data() + offset, 4);
+        // 1. 读取数据类型
+        uint32_t datatype_len = 0;
+        memcpy(&datatype_len, data.data() + offset, 4);
         offset += 4;
         
-        std::string type(data.begin() + offset, data.begin() + offset + type_len);
-        offset += type_len;
+        if (offset + datatype_len > data.size()) {
+            LOG_ERROR("Invalid datatype length");
+            return nullptr;
+        }
         
-        // 读取MD5
+        std::string datatype(data.begin() + offset, data.begin() + offset + datatype_len);
+        offset += datatype_len;
+        
+        // 2. 读取 MD5
         uint32_t md5_len = 0;
         memcpy(&md5_len, data.data() + offset, 4);
         offset += 4;
         
+        if (offset + md5_len > data.size()) {
+            LOG_ERROR("Invalid MD5 length");
+            return nullptr;
+        }
+        
         std::string md5(data.begin() + offset, data.begin() + offset + md5_len);
         offset += md5_len;
         
-        // 读取定义
-        uint32_t def_len = 0;
-        memcpy(&def_len, data.data() + offset, 4);
+        // 3. 读取消息定义
+        uint32_t msg_def_len = 0;
+        memcpy(&msg_def_len, data.data() + offset, 4);
         offset += 4;
         
-        std::string def(data.begin() + offset, data.begin() + offset + def_len);
-        offset += def_len;
+        if (offset + msg_def_len > data.size()) {
+            LOG_ERROR("Invalid message definition length");
+            return nullptr;
+        }
         
-        // 读取消息大小
+        std::string msg_def(data.begin() + offset, data.begin() + offset + msg_def_len);
+        offset += msg_def_len;
+        
+        // 4. 读取消息数据大小
         uint32_t msg_size = 0;
         memcpy(&msg_size, data.data() + offset, 4);
         offset += 4;
+        
+        if (offset + msg_size > data.size()) {
+            LOG_ERROR("Invalid message size");
+            return nullptr;
+        }
         
         // 创建 ShapeShifter
         auto shape_shifter = boost::make_shared<topic_tools::ShapeShifter>();
         
         // 设置消息类型信息
-        shape_shifter->morph(md5, type, def, "");
+        shape_shifter->morph(md5, datatype, msg_def, "");
         
-        // 反序列化消息内容
-        // ShapeShifter 提供了从序列化数据创建的方法
-        boost::shared_array<uint8_t> msg_buf(new uint8_t[msg_size]);
-        memcpy(msg_buf.get(), data.data() + offset, msg_size);
-        
-        // 创建一个stream并读取数据
-        ros::serialization::IStream stream(msg_buf.get(), msg_size);
+        // 反序列化消息数据
+        ros::serialization::IStream stream(const_cast<uint8_t*>(data.data() + offset), msg_size);
         ros::serialization::deserialize(stream, *shape_shifter);
         
         return shape_shifter;

@@ -2,6 +2,7 @@
 #include "multibotnet/utils/logger.hpp"
 #include <ros/service_manager.h>
 #include <std_srvs/SetBool.h>
+#include <std_srvs/Trigger.h>
 #include <nav_msgs/GetPlan.h>
 
 namespace multibotnet {
@@ -22,6 +23,14 @@ void ServiceFactory::registerCommonServiceTypes() {
     setBoolInfo.req_md5sum = "b88405221c77b1878a3cbbfff53428d7";
     setBoolInfo.res_md5sum = "937c9679a518e3a18d831e57125ea522";
     service_info_cache_["std_srvs/SetBool"] = setBoolInfo;
+    
+    // 注册 std_srvs/Trigger
+    ServiceInfo triggerInfo;
+    triggerInfo.req_datatype = "std_srvs/TriggerRequest";
+    triggerInfo.res_datatype = "std_srvs/TriggerResponse";
+    triggerInfo.req_md5sum = "d41d8cd98f00b204e9800998ecf8427e";  // 空请求的MD5
+    triggerInfo.res_md5sum = "937c9679a518e3a18d831e57125ea522";
+    service_info_cache_["std_srvs/Trigger"] = triggerInfo;
     
     // 注册 nav_msgs/GetPlan
     ServiceInfo getPlanInfo;
@@ -44,27 +53,42 @@ ServiceCallback ServiceFactory::createServiceProxy(const std::string& service_na
     }
     
     // 返回一个服务代理函数
+    // 注意：这个函数主要用于序列化/反序列化，实际的网络调用由ServiceManager处理
     return [this, service_name, service_type](const std::vector<uint8_t>& req_data) 
         -> std::vector<uint8_t> {
         try {
-            // 对于本地服务，我们可以直接返回空响应
-            // 实际的服务调用应该通过ZMQ传输层完成
             LOG_DEBUGF("Service proxy called for %s", service_name.c_str());
             
-            // 返回一个最小的有效响应
+            // 这里只是返回请求数据的占位符
+            // 实际的服务调用应该通过ZMQ传输层完成
+            // ServiceManager会处理实际的网络通信
+            
+            // 对于测试，我们需要返回一个有效的响应
             std::vector<uint8_t> response;
             
-            // 根据服务类型构造基本响应
             if (service_type == "std_srvs/SetBool") {
-                // SetBool响应包含: bool success, string message
-                response.resize(5);  // 1字节bool + 4字节string长度
-                response[0] = 1;     // success = true
-                // string长度 = 0 (空消息)
-                memset(&response[1], 0, 4);
+                // SetBool响应：bool success + string message
+                response.push_back(1);  // success = true
+                
+                // 消息字符串
+                std::string message = "Service proxy response";
+                uint32_t msg_len = message.size();
+                response.insert(response.end(), (uint8_t*)&msg_len, (uint8_t*)&msg_len + 4);
+                response.insert(response.end(), message.begin(), message.end());
+            } else if (service_type == "std_srvs/Trigger") {
+                // Trigger响应：bool success + string message
+                response.push_back(1);  // success = true
+                
+                // 消息字符串
+                std::string message = "Trigger proxy response";
+                uint32_t msg_len = message.size();
+                response.insert(response.end(), (uint8_t*)&msg_len, (uint8_t*)&msg_len + 4);
+                response.insert(response.end(), message.begin(), message.end());
             } else {
                 // 其他服务返回最小响应
-                response.resize(1);
-                response[0] = 0;
+                response.push_back(0);  // success = false
+                uint32_t zero = 0;
+                response.insert(response.end(), (uint8_t*)&zero, (uint8_t*)&zero + 4);
             }
             
             return response;

@@ -379,7 +379,9 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->config.address = resolveAddress(config.address);
         info->active = true;
         info->first_message = true;
-        info->has_advertised = false;  // 确保初始化这个标志
+        info->has_advertised = false;
+        // 初始化发布者为空
+        info->publisher = ros::Publisher();
         
         // 创建ZMQ传输
         info->transport = std::make_shared<ZmqTransport>(
@@ -392,7 +394,7 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         // 特殊处理 localhost 连接
         std::string connect_ip = info->config.address;
         if (connect_ip == "127.0.0.1" || connect_ip == "localhost") {
-            connect_ip = "127.0.0.1";  // 确保使用标准的本地回环地址
+            connect_ip = "127.0.0.1";
         }
         
         // 连接地址
@@ -407,10 +409,10 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
             return;
         }
         
-        // 重要：在连接成功后才订阅消息
-        info->transport->subscribe("");  // 订阅所有消息
+        // 订阅所有消息
+        info->transport->subscribe("");
         
-        // 先不创建发布者，等待第一条消息到达时创建
+        // 不在这里创建发布者，等待第一条消息到达时创建
         // 这样可以获得正确的消息类型信息
         
         // 启动接收线程
@@ -459,97 +461,111 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
     }
 }
 
-// 在 topic_manager.cpp 中替换 processReceivedMessage 函数
-
 void TopicManager::processReceivedMessage(RecvTopicInfo* info, 
-    const std::vector<uint8_t>& data) {
-try {
-// 检查是否是批处理消息
-if (data.size() >= 4) {
-uint32_t msg_count;
-memcpy(&msg_count, data.data(), 4);
-
-// 简单的批处理检测
-if (msg_count > 0 && msg_count < 1000 && data.size() > 8) {
-// 尝试作为批处理消息处理
-MessageBatch batch;
-batch.timestamp = std::chrono::steady_clock::now();
-
-size_t offset = 4;
-size_t processed = 0;
-
-while (offset < data.size() && processed < msg_count) {
-if (offset + 4 > data.size()) break;
-
-uint32_t msg_size;
-memcpy(&msg_size, data.data() + offset, 4);
-offset += 4;
-
-if (offset + msg_size > data.size()) break;
-
-std::vector<uint8_t> single_msg(
-data.begin() + offset,
-data.begin() + offset + msg_size);
-
-processReceivedMessage(info, single_msg);
-
-offset += msg_size;
-processed++;
-}
-
-if (processed > 0) {
-return;  // 成功处理批处理消息
-}
-}
-}
-
-// 解压消息（如果需要）
-std::vector<uint8_t> decompressed;
-if (CompressionManager::hasCompressionHeader(data)) {
-decompressed = compression_manager_->decompressWithHeader(data);
-if (decompressed.empty()) {
-LOG_ERROR("Failed to decompress message");
-return;
-}
-} else {
-decompressed = data;
-}
-
-// 反序列化消息为ShapeShifter
-auto shape_shifter_msg = message_factory_->deserialize(
-decompressed,
-info->config.message_type,  
-"",  
-""   
-);
-
-if (!shape_shifter_msg) {
-LOG_ERROR("Failed to deserialize message");
-return;
-}
-
-// 如果还没有创建发布者，现在创建
-if (!info->has_advertised || !info->publisher) {
-// 使用消息工厂创建发布者，避免直接使用模板
-info->publisher = message_factory_->createPublisher(
-    info->config.topic,
-    info->config.message_type,
-    10);
-info->has_advertised = true;
-
-LOG_INFOF("Created publisher for %s (type: %s)", 
-    info->config.topic.c_str(),
-    info->config.message_type.c_str());
-}
-
-// 发布消息
-if (info->publisher) {
-info->publisher.publish(shape_shifter_msg);
-}
-
-} catch (const std::exception& e) {
-LOG_ERROR("Error processing received message: " + std::string(e.what()));
-}
+                                        const std::vector<uint8_t>& data) {
+    try {
+        // 检查是否是批处理消息
+        if (data.size() >= 4) {
+            uint32_t msg_count;
+            memcpy(&msg_count, data.data(), 4);
+            
+            // 简单的批处理检测
+            if (msg_count > 0 && msg_count < 1000 && data.size() > 8) {
+                // 检查是否真的是批处理格式
+                size_t offset = 4;
+                bool is_batch = true;
+                
+                // 快速验证第一个消息
+                if (offset + 4 <= data.size()) {
+                    uint32_t first_msg_size;
+                    memcpy(&first_msg_size, data.data() + offset, 4);
+                    if (offset + 4 + first_msg_size > data.size() || first_msg_size == 0) {
+                        is_batch = false;
+                    }
+                } else {
+                    is_batch = false;
+                }
+                
+                if (is_batch) {
+                    // 处理批处理消息
+                    offset = 4;
+                    size_t processed = 0;
+                    
+                    while (offset < data.size() && processed < msg_count) {
+                        if (offset + 4 > data.size()) break;
+                        
+                        uint32_t msg_size;
+                        memcpy(&msg_size, data.data() + offset, 4);
+                        offset += 4;
+                        
+                        if (offset + msg_size > data.size()) break;
+                        
+                        std::vector<uint8_t> single_msg(
+                            data.begin() + offset,
+                            data.begin() + offset + msg_size);
+                        
+                        processReceivedMessage(info, single_msg);
+                        
+                        offset += msg_size;
+                        processed++;
+                    }
+                    
+                    return;  // 批处理消息处理完成
+                }
+            }
+        }
+        
+        // 解压消息（如果需要）
+        std::vector<uint8_t> decompressed;
+        if (CompressionManager::hasCompressionHeader(data)) {
+            decompressed = compression_manager_->decompressWithHeader(data);
+            if (decompressed.empty()) {
+                LOG_ERROR("Failed to decompress message");
+                return;
+            }
+        } else {
+            decompressed = data;
+        }
+        
+        // 反序列化消息
+        auto shape_shifter_msg = message_factory_->deserialize(
+            decompressed,
+            info->config.message_type,
+            "",
+            ""
+        );
+        
+        if (!shape_shifter_msg) {
+            LOG_ERROR("Failed to deserialize message");
+            return;
+        }
+        
+        // 如果还没有创建发布者，使用 ShapeShifter 实例创建
+        if (!info->has_advertised || !info->publisher) {
+            info->publisher = message_factory_->createPublisherFromShapeShifter(
+                info->config.topic,
+                shape_shifter_msg,
+                10);
+            
+            if (info->publisher) {
+                info->has_advertised = true;
+                LOG_INFOF("Created publisher for %s (type: %s)", 
+                    info->config.topic.c_str(),
+                    shape_shifter_msg->getDataType().c_str());
+            } else {
+                LOG_ERROR("Failed to create publisher for " + info->config.topic);
+                return;
+            }
+        }
+        
+        // 发布消息
+        if (info->publisher) {
+            info->publisher.publish(shape_shifter_msg);
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error processing received message: " + std::string(e.what()));
+    }
 }
 
 } // namespace multibotnet

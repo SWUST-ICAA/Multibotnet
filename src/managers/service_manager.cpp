@@ -219,40 +219,10 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
             return;
         }
         
-        // 创建服务处理器
-        auto handler = [this, service_name = config.service_name]
-                      (ros::SerializedMessage& req, ros::SerializedMessage& res) -> bool {
-            try {
-                // 创建本地服务客户端代理
-                auto proxy = service_factory_->createServiceProxy(
-                    service_name, "");  // 类型会自动推断
-                
-                if (!proxy) {
-                    LOG_ERROR("Failed to create service proxy for " + service_name);
-                    return false;
-                }
-                
-                // 序列化请求
-                auto req_data = service_factory_->serializeRequest(req);
-                
-                // 调用本地服务
-                auto res_data = proxy(req_data);
-                if (res_data.empty()) {
-                    return false;
-                }
-                
-                // 反序列化响应
-                res = service_factory_->deserializeResponse(res_data, "");
-                return true;
-            } catch (const std::exception& e) {
-                LOG_ERROR("Service handler error: " + std::string(e.what()));
-                return false;
-            }
-        };
-        
-        // 创建ROS服务服务器
-        info->server = service_factory_->createServiceServer(
-            config.service_name, config.service_type, handler);
+        // 创建服务处理函数，但不创建实际的 ROS 服务
+        // 因为我们要支持任意服务类型，所以完全通过 ZMQ 处理
+        LOG_INFO("Service provider registered for " + config.service_name + 
+                " (type: " + config.service_type + ")");
         
         // 启动服务线程
         info->service_thread = std::thread(
@@ -293,25 +263,27 @@ void ServiceManager::serviceProviderLoop(ProvideServiceInfo* info) {
 void ServiceManager::handleServiceRequest(ProvideServiceInfo* info, 
                                         const std::vector<uint8_t>& request) {
     try {
-        // 反序列化请求
-        auto req = service_factory_->deserializeRequest(
-            request, info->config.service_type);
-        
-        // 创建响应
-        ros::SerializedMessage res;
-        
-        // 调用本地ROS服务
+        // 创建服务代理来调用本地 ROS 服务
         auto proxy = service_factory_->createServiceProxy(
             info->config.service_name, info->config.service_type);
         
         if (!proxy) {
-            LOG_ERROR("Failed to create service proxy");
-            // 发送空响应表示错误
-            info->transport->send({});
+            LOG_ERROR("Failed to create service proxy for " + info->config.service_name);
+            // 发送错误响应
+            std::vector<uint8_t> error_response = {0, 0, 0, 0, 0};  // 默认错误响应
+            info->transport->send(error_response);
+            info->stats.errors++;
             return;
         }
         
+        // 调用服务代理（它会处理序列化/反序列化）
         auto response_data = proxy(request);
+        
+        if (response_data.empty()) {
+            LOG_ERROR("Service proxy returned empty response");
+            // 发送默认错误响应
+            response_data = {0, 0, 0, 0, 0};  // success=false, empty message
+        }
         
         // 发送响应
         if (!info->transport->send(response_data)) {
@@ -325,8 +297,9 @@ void ServiceManager::handleServiceRequest(ProvideServiceInfo* info,
     } catch (const std::exception& e) {
         LOG_ERROR("Error handling service request: " + std::string(e.what()));
         info->stats.errors++;
-        // 发送空响应表示错误
-        info->transport->send({});
+        // 发送错误响应
+        std::vector<uint8_t> error_response = {0, 0, 0, 0, 0};  // success=false, empty message
+        info->transport->send(error_response);
     }
 }
 
@@ -358,7 +331,8 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
         info->connection_pool->preCreateConnections(connect_address, 1);
         
         request_services_[config.service_name] = std::move(info);
-        LOG_INFO("Setup request service: " + config.service_name);
+        LOG_INFO("Setup request service: " + config.service_name + 
+                " (type: " + config.service_type + ")");
         
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup request service " + config.service_name + 

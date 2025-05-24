@@ -49,7 +49,7 @@ recv_topics:
     connect_address: localhost
     port: 3002
 
-  - topic: /tetopic_testst/scan
+  - topic: /topic_test/scan
     message_type: sensor_msgs/LaserScan
     connect_address: localhost
     port: 3003
