@@ -5,6 +5,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <std_srvs/SetBool.h>
+#include <std_srvs/Trigger.h>
 
 namespace multibotnet {
 
@@ -118,7 +120,7 @@ void ServiceManager::printStatistics() const {
         }
     }
     
-    // 打印请求服务统计（只显示发送的调用）
+    // 打印请求服务统计
     for (const auto& pair : request_stats) {
         const auto& name = pair.first;
         const auto& stat = pair.second;
@@ -137,7 +139,7 @@ void ServiceManager::printStatistics() const {
         }
     }
     
-    // 打印提供服务统计（只显示接收的调用）
+    // 打印提供服务统计
     for (const auto& pair : provide_stats) {
         const auto& name = pair.first;
         const auto& stat = pair.second;
@@ -290,17 +292,13 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
             return;
         }
         
-        // 创建服务处理函数，但不创建实际的 ROS 服务
-        // 因为我们要支持任意服务类型，所以完全通过 ZMQ 处理
-        LOG_INFO("Service provider registered for " + config.service_name + 
-                " (type: " + config.service_type + ")");
-        
         // 启动服务线程
         info->service_thread = std::thread(
             &ServiceManager::serviceProviderLoop, this, info.get());
         
         provide_services_.push_back(std::move(info));
-        LOG_INFO("Setup provide service: " + config.service_name);
+        LOG_INFO("Setup provide service: " + config.service_name + 
+                " on " + bind_address);
         
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup provide service " + config.service_name + 
@@ -319,6 +317,9 @@ void ServiceManager::serviceProviderLoop(ProvideServiceInfo* info) {
             
             info->stats.messages_received++;
             info->stats.bytes_received += request_data.size();
+            
+            LOG_DEBUGF("Received service request for %s (%zu bytes)", 
+                      info->config.service_name.c_str(), request_data.size());
             
             // 处理请求
             handleServiceRequest(info, request_data);
@@ -347,7 +348,7 @@ void ServiceManager::handleServiceRequest(ProvideServiceInfo* info,
             return;
         }
         
-        // 调用服务代理（它会处理序列化/反序列化）
+        // 调用服务代理
         auto response_data = proxy(request);
         
         if (response_data.empty()) {
@@ -355,6 +356,9 @@ void ServiceManager::handleServiceRequest(ProvideServiceInfo* info,
             // 发送默认错误响应
             response_data = {0, 0, 0, 0, 0};  // success=false, empty message
         }
+        
+        LOG_DEBUGF("Sending service response for %s (%zu bytes)", 
+                  info->config.service_name.c_str(), response_data.size());
         
         // 发送响应
         if (!info->transport->send(response_data)) {
@@ -401,13 +405,116 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
                                      std::to_string(config.port);
         info->connection_pool->preCreateConnections(connect_address, 1);
         
+        // 创建ROS服务代理
+        createROSServiceProxy(config.service_name, config.service_type, info.get());
+        
         request_services_[config.service_name] = std::move(info);
         LOG_INFO("Setup request service: " + config.service_name + 
-                " (type: " + config.service_type + ")");
+                " -> " + connect_address);
         
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup request service " + config.service_name + 
                  ": " + e.what());
+    }
+}
+
+void ServiceManager::createROSServiceProxy(const std::string& service_name,
+                                         const std::string& service_type,
+                                         RequestServiceInfo* info) {
+    // 根据服务类型创建ROS服务代理
+    ros::NodeHandle nh;
+    
+    if (service_type == "std_srvs/SetBool") {
+        info->server = nh.advertiseService(
+            service_name,
+            boost::function<bool(std_srvs::SetBool::Request&, 
+                               std_srvs::SetBool::Response&)>(
+                [this, info](std_srvs::SetBool::Request& req,
+                           std_srvs::SetBool::Response& res) -> bool {
+                    // 序列化请求
+                    std::vector<uint8_t> request_data;
+                    request_data.push_back(req.data ? 1 : 0);
+                    
+                    // 调用远程服务
+                    std::vector<uint8_t> response_data;
+                    if (!callRemoteService(info, request_data, response_data, 
+                                         info->config.timeout_ms)) {
+                        res.success = false;
+                        res.message = "Remote service call failed";
+                        return false;
+                    }
+                    
+                    // 反序列化响应
+                    if (response_data.size() >= 5) {
+                        res.success = response_data[0] != 0;
+                        
+                        uint32_t msg_len;
+                        memcpy(&msg_len, response_data.data() + 1, 4);
+                        
+                        if (response_data.size() >= 5 + msg_len) {
+                            res.message = std::string(
+                                response_data.begin() + 5,
+                                response_data.begin() + 5 + msg_len);
+                        }
+                    } else {
+                        res.success = false;
+                        res.message = "Invalid response format";
+                    }
+                    
+                    return true;
+                }
+            )
+        );
+        
+        LOG_INFOF("Created ROS service proxy: %s (type: %s)", 
+                 service_name.c_str(), service_type.c_str());
+        
+    } else if (service_type == "std_srvs/Trigger") {
+        info->server = nh.advertiseService(
+            service_name,
+            boost::function<bool(std_srvs::Trigger::Request&, 
+                               std_srvs::Trigger::Response&)>(
+                [this, info](std_srvs::Trigger::Request& req,
+                           std_srvs::Trigger::Response& res) -> bool {
+                    // Trigger没有请求数据
+                    std::vector<uint8_t> request_data;
+                    
+                    // 调用远程服务
+                    std::vector<uint8_t> response_data;
+                    if (!callRemoteService(info, request_data, response_data, 
+                                         info->config.timeout_ms)) {
+                        res.success = false;
+                        res.message = "Remote service call failed";
+                        return false;
+                    }
+                    
+                    // 反序列化响应
+                    if (response_data.size() >= 5) {
+                        res.success = response_data[0] != 0;
+                        
+                        uint32_t msg_len;
+                        memcpy(&msg_len, response_data.data() + 1, 4);
+                        
+                        if (response_data.size() >= 5 + msg_len) {
+                            res.message = std::string(
+                                response_data.begin() + 5,
+                                response_data.begin() + 5 + msg_len);
+                        }
+                    } else {
+                        res.success = false;
+                        res.message = "Invalid response format";
+                    }
+                    
+                    return true;
+                }
+            )
+        );
+        
+        LOG_INFOF("Created ROS service proxy: %s (type: %s)", 
+                 service_name.c_str(), service_type.c_str());
+        
+    } else {
+        LOG_WARNF("Unsupported service type for ROS proxy: %s", service_type.c_str());
     }
 }
 
@@ -444,6 +551,9 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
                 continue;
             }
             
+            LOG_DEBUGF("Sending service request to %s (%zu bytes)", 
+                      connect_address.c_str(), request.size());
+            
             // 发送请求
             if (!conn->send(request)) {
                 LOG_ERROR("Failed to send service request");
@@ -460,9 +570,12 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
                 continue;
             }
             
-            // 检查响应是否为空（表示错误）
+            LOG_DEBUGF("Received service response from %s (%zu bytes)", 
+                      connect_address.c_str(), response.size());
+            
+            // 检查响应是否为空
             if (response.empty()) {
-                LOG_ERROR("Received empty response, service call failed");
+                LOG_ERROR("Received empty response");
                 info->stats.errors++;
                 
                 if (attempt < retries) {
@@ -507,7 +620,6 @@ void ServiceManager::processRequestQueue() {
             lock.unlock();
             
             // 处理请求（这里可以添加更复杂的逻辑）
-            // 目前直接在服务线程中处理
             
             lock.lock();
         }

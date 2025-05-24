@@ -81,6 +81,7 @@ private:
     struct RequestServiceInfo {
         ServiceConfig config;
         std::shared_ptr<ConnectionPool> connection_pool;
+        ros::ServiceServer server;  // 添加ROS服务服务器（作为代理）
         std::mutex mutex;
         Statistics stats;
     };
@@ -123,6 +124,9 @@ private:
     
     // 服务请求相关
     void setupRequestService(const ServiceConfig& config);
+    void createROSServiceProxy(const std::string& service_name,
+                             const std::string& service_type,
+                             RequestServiceInfo* info);
     bool callRemoteService(RequestServiceInfo* info,
                           const std::vector<uint8_t>& request,
                           std::vector<uint8_t>& response,

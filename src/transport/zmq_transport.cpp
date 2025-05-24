@@ -33,9 +33,17 @@ ZmqTransport::ZmqTransport(zmq::context_t& context,
 }
 
 ZmqTransport::~ZmqTransport() {
+    // 首先停止健康检查线程
     running_ = false;
     if (health_check_thread_.joinable()) {
         health_check_thread_.join();
+    }
+    
+    // 然后关闭套接字
+    try {
+        socket_.close();
+    } catch (...) {
+        // 忽略关闭时的异常
     }
 }
 
@@ -262,9 +270,11 @@ void ZmqTransport::enableHealthCheck(bool enable, int interval_ms) {
     if (enable && !health_check_thread_.joinable()) {
         running_ = true;
         health_check_thread_ = std::thread(&ZmqTransport::healthCheckLoop, this);
-    } else if (!enable && health_check_thread_.joinable()) {
+    } else if (!enable) {
         running_ = false;
-        health_check_thread_.join();
+        if (health_check_thread_.joinable()) {
+            health_check_thread_.join();
+        }
     }
 }
 
