@@ -149,47 +149,98 @@ bool ZmqTransport::sendBatch(const MessageBatch& batch) {
 
 bool ZmqTransport::receive(std::vector<uint8_t>& data, int timeout_ms) {
     try {
-        zmq::pollitem_t items[] = {{static_cast<void*>(socket_), 0, ZMQ_POLLIN, 0}};
-        int rc = zmq::poll(items, 1, timeout_ms);
-        
-        if (rc < 0) {
-            LOG_ERROR("Poll error");
-            return false;
-        }
-        
-        if (rc == 0) {
-            // 超时
-            return false;
-        }
-        
-        if (items[0].revents & ZMQ_POLLIN) {
-            zmq::message_t msg;
+        // 对于REP套接字，特殊处理
+        if (socket_type_ == SocketType::REP && timeout_ms > 0) {
+            // REP套接字使用poll来检查是否有消息
+            zmq::pollitem_t items[] = {{static_cast<void*>(socket_), 0, ZMQ_POLLIN, 0}};
+            int rc = zmq::poll(items, 1, timeout_ms);
             
-            // 使用新的API（ZMQ 4.3.1+）
+            if (rc < 0) {
+                int err = errno;
+                if (err == EINTR) {
+                    // 被信号中断，这是正常的
+                    return false;
+                }
+                LOG_ERRORF("Poll error: %s (errno=%d)", strerror(err), err);
+                return false;
+            }
+            
+            if (rc == 0) {
+                // 超时，这是正常的
+                return false;
+            }
+            
+            // 有数据可读
+            if (items[0].revents & ZMQ_POLLIN) {
+                zmq::message_t msg;
+                
+                // 使用新的API（ZMQ 4.3.1+）
 #if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 1)
-            zmq::recv_result_t result = socket_.recv(msg, zmq::recv_flags::none);
-            if (!result.has_value()) {
-                return false;
-            }
+                zmq::recv_result_t result = socket_.recv(msg, zmq::recv_flags::none);
+                if (!result.has_value()) {
+                    return false;
+                }
 #else
-            // 旧版本API
-            if (!socket_.recv(&msg)) {
+                // 旧版本API
+                if (!socket_.recv(&msg)) {
+                    return false;
+                }
+#endif
+                
+                data.resize(msg.size());
+                memcpy(data.data(), msg.data(), msg.size());
+                
+                updateStatistics(data.size(), false);
+                LOG_DEBUGF("Received %zu bytes on %s socket", data.size(), 
+                          socket_type_ == SocketType::REP ? "REP" : "other");
+                return true;
+            }
+        } else {
+            // 其他类型的套接字或无超时的情况
+            zmq::pollitem_t items[] = {{static_cast<void*>(socket_), 0, ZMQ_POLLIN, 0}};
+            int rc = zmq::poll(items, 1, timeout_ms);
+            
+            if (rc < 0) {
+                if (errno == EINTR) {
+                    return false;
+                }
+                LOG_ERROR("Poll error");
                 return false;
             }
+            
+            if (rc == 0) {
+                // 超时
+                return false;
+            }
+            
+            if (items[0].revents & ZMQ_POLLIN) {
+                zmq::message_t msg;
+                
+#if CPPZMQ_VERSION >= ZMQ_MAKE_VERSION(4, 3, 1)
+                zmq::recv_result_t result = socket_.recv(msg, zmq::recv_flags::none);
+                if (!result.has_value()) {
+                    return false;
+                }
+#else
+                if (!socket_.recv(&msg)) {
+                    return false;
+                }
 #endif
-            
-            data.resize(msg.size());
-            memcpy(data.data(), msg.data(), msg.size());
-            
-            updateStatistics(data.size(), false);
-            return true;
+                
+                data.resize(msg.size());
+                memcpy(data.data(), msg.data(), msg.size());
+                
+                updateStatistics(data.size(), false);
+                return true;
+            }
         }
         
         return false;
     } catch (const zmq::error_t& e) {
-        LOG_ERRORF("Receive error: %s", e.what());
-        state_ = ConnectionState::ERROR;
-        stats_.errors++;
+        if (e.num() != EINTR) {  // 忽略中断错误
+            LOG_ERRORF("Receive error: %s", e.what());
+            stats_.errors++;
+        }
         return false;
     }
 }

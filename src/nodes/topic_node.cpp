@@ -47,6 +47,21 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // 设置日志级别
+    std::string log_level_str = "info";
+    nh.param("log_level", log_level_str, std::string("info"));
+    
+    if (log_level_str == "debug") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::DEBUG);
+        ROS_INFO("Log level set to DEBUG");
+    } else if (log_level_str == "info") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::INFO);
+    } else if (log_level_str == "warn") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::WARN);
+    } else if (log_level_str == "error") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::ERROR);
+    }
+    
     // 打印启动横幅
     std::cout << CYAN
               << " __  __       _ _   _ _           _   _   _      _   \n"

@@ -5,8 +5,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstring>
-#include <std_srvs/SetBool.h>
-#include <std_srvs/Trigger.h>
 
 namespace multibotnet {
 
@@ -280,9 +278,9 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
         int linger = 0;
         info->transport->setOption(ZMQ_LINGER, linger);
         
-        // 设置接收超时
-        int rcv_timeout = 100;  // 100ms
-        info->transport->setOption(ZMQ_RCVTIMEO, rcv_timeout);
+        // 不要设置RCVTIMEO，让poll来控制超时
+        // int rcv_timeout = 100;  // 100ms
+        // info->transport->setOption(ZMQ_RCVTIMEO, rcv_timeout);
         
         // 绑定地址
         std::string bind_address = "tcp://" + info->config.address + ":" + 
@@ -291,6 +289,9 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
             LOG_ERROR("Failed to bind service " + config.service_name);
             return;
         }
+        
+        LOG_INFOF("Successfully bound service %s to %s", 
+                 config.service_name.c_str(), bind_address.c_str());
         
         // 启动服务线程
         info->service_thread = std::thread(
@@ -307,19 +308,26 @@ void ServiceManager::setupProvideService(const ServiceConfig& config) {
 }
 
 void ServiceManager::serviceProviderLoop(ProvideServiceInfo* info) {
+    LOG_INFOF("Service provider loop started for %s", info->config.service_name.c_str());
+    
     while (info->active && running_ && ros::ok()) {
         try {
             // 接收请求
             std::vector<uint8_t> request_data;
+            
+            // 添加调试信息
+            LOG_DEBUGF("Waiting for request on %s...", info->config.service_name.c_str());
+            
             if (!info->transport->receive(request_data, 100)) {  // 100ms超时
+                // 这是正常的超时，不需要记录
                 continue;
             }
             
+            LOG_INFOF("Received request for %s (%zu bytes)", 
+                     info->config.service_name.c_str(), request_data.size());
+            
             info->stats.messages_received++;
             info->stats.bytes_received += request_data.size();
-            
-            LOG_DEBUGF("Received service request for %s (%zu bytes)", 
-                      info->config.service_name.c_str(), request_data.size());
             
             // 处理请求
             handleServiceRequest(info, request_data);
@@ -330,23 +338,29 @@ void ServiceManager::serviceProviderLoop(ProvideServiceInfo* info) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+    
+    LOG_INFOF("Service provider loop stopped for %s", info->config.service_name.c_str());
 }
 
 void ServiceManager::handleServiceRequest(ProvideServiceInfo* info, 
                                         const std::vector<uint8_t>& request) {
     try {
+        LOG_DEBUGF("Handling service request for %s", info->config.service_name.c_str());
+        
         // 创建服务代理来调用本地 ROS 服务
         auto proxy = service_factory_->createServiceProxy(
             info->config.service_name, info->config.service_type);
         
         if (!proxy) {
             LOG_ERROR("Failed to create service proxy for " + info->config.service_name);
-            // 发送错误响应
-            std::vector<uint8_t> error_response = {0, 0, 0, 0, 0};  // 默认错误响应
+            // 发送错误响应 - 对于REP套接字，必须发送响应
+            std::vector<uint8_t> error_response = {0};  // 空响应表示错误
             info->transport->send(error_response);
             info->stats.errors++;
             return;
         }
+        
+        LOG_DEBUGF("Calling service proxy for %s", info->config.service_name.c_str());
         
         // 调用服务代理
         auto response_data = proxy(request);
@@ -354,26 +368,27 @@ void ServiceManager::handleServiceRequest(ProvideServiceInfo* info,
         if (response_data.empty()) {
             LOG_ERROR("Service proxy returned empty response");
             // 发送默认错误响应
-            response_data = {0, 0, 0, 0, 0};  // success=false, empty message
+            response_data = {0};  // 空响应表示错误
         }
         
         LOG_DEBUGF("Sending service response for %s (%zu bytes)", 
                   info->config.service_name.c_str(), response_data.size());
         
-        // 发送响应
+        // 发送响应 - REP套接字必须发送响应
         if (!info->transport->send(response_data)) {
             LOG_ERROR("Failed to send service response");
             info->stats.errors++;
         } else {
             info->stats.messages_sent++;
             info->stats.bytes_sent += response_data.size();
+            LOG_INFOF("Service %s handled successfully", info->config.service_name.c_str());
         }
         
     } catch (const std::exception& e) {
         LOG_ERROR("Error handling service request: " + std::string(e.what()));
         info->stats.errors++;
-        // 发送错误响应
-        std::vector<uint8_t> error_response = {0, 0, 0, 0, 0};  // success=false, empty message
+        // 即使出错也要发送响应，否则REP套接字会进入错误状态
+        std::vector<uint8_t> error_response = {0};
         info->transport->send(error_response);
     }
 }
@@ -385,14 +400,8 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
         info->config.address = resolveAddress(config.address);
         info->stats.start_time = std::chrono::steady_clock::now();
         
-        // 创建连接池
-        ConnectionPoolConfig pool_config;
-        pool_config.min_connections = 1;
-        pool_config.max_connections = 5;
-        pool_config.connection_timeout_ms = config.timeout_ms;
-        
-        info->connection_pool = std::make_shared<ConnectionPool>(
-            context_, ZmqTransport::SocketType::REQ, pool_config);
+        // 不使用连接池，为每个服务创建独立的REQ套接字
+        // 连接池对REQ-REP模式不适用
         
         // 特殊处理localhost
         std::string connect_ip = info->config.address;
@@ -400,17 +409,12 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
             connect_ip = "127.0.0.1";
         }
         
-        // 预创建连接
-        std::string connect_address = "tcp://" + connect_ip + ":" + 
-                                     std::to_string(config.port);
-        info->connection_pool->preCreateConnections(connect_address, 1);
-        
         // 创建ROS服务代理
         createROSServiceProxy(config.service_name, config.service_type, info.get());
         
         request_services_[config.service_name] = std::move(info);
         LOG_INFO("Setup request service: " + config.service_name + 
-                " -> " + connect_address);
+                " -> tcp://" + connect_ip + ":" + std::to_string(config.port));
         
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup request service " + config.service_name + 
@@ -421,100 +425,23 @@ void ServiceManager::setupRequestService(const ServiceConfig& config) {
 void ServiceManager::createROSServiceProxy(const std::string& service_name,
                                          const std::string& service_type,
                                          RequestServiceInfo* info) {
-    // 根据服务类型创建ROS服务代理
-    ros::NodeHandle nh;
+    // 创建远程服务调用的lambda函数
+    auto remote_handler = [this, info](const std::vector<uint8_t>& request) 
+        -> std::vector<uint8_t> {
+        std::vector<uint8_t> response;
+        callRemoteService(info, request, response, info->config.timeout_ms);
+        return response;
+    };
     
-    if (service_type == "std_srvs/SetBool") {
-        info->server = nh.advertiseService(
-            service_name,
-            boost::function<bool(std_srvs::SetBool::Request&, 
-                               std_srvs::SetBool::Response&)>(
-                [this, info](std_srvs::SetBool::Request& req,
-                           std_srvs::SetBool::Response& res) -> bool {
-                    // 序列化请求
-                    std::vector<uint8_t> request_data;
-                    request_data.push_back(req.data ? 1 : 0);
-                    
-                    // 调用远程服务
-                    std::vector<uint8_t> response_data;
-                    if (!callRemoteService(info, request_data, response_data, 
-                                         info->config.timeout_ms)) {
-                        res.success = false;
-                        res.message = "Remote service call failed";
-                        return false;
-                    }
-                    
-                    // 反序列化响应
-                    if (response_data.size() >= 5) {
-                        res.success = response_data[0] != 0;
-                        
-                        uint32_t msg_len;
-                        memcpy(&msg_len, response_data.data() + 1, 4);
-                        
-                        if (response_data.size() >= 5 + msg_len) {
-                            res.message = std::string(
-                                response_data.begin() + 5,
-                                response_data.begin() + 5 + msg_len);
-                        }
-                    } else {
-                        res.success = false;
-                        res.message = "Invalid response format";
-                    }
-                    
-                    return true;
-                }
-            )
-        );
-        
+    // 使用service_factory创建ROS服务服务器
+    info->server = service_factory_->createServiceServer(
+        service_name, service_type, remote_handler);
+    
+    if (info->server) {
         LOG_INFOF("Created ROS service proxy: %s (type: %s)", 
                  service_name.c_str(), service_type.c_str());
-        
-    } else if (service_type == "std_srvs/Trigger") {
-        info->server = nh.advertiseService(
-            service_name,
-            boost::function<bool(std_srvs::Trigger::Request&, 
-                               std_srvs::Trigger::Response&)>(
-                [this, info](std_srvs::Trigger::Request& req,
-                           std_srvs::Trigger::Response& res) -> bool {
-                    // Trigger没有请求数据
-                    std::vector<uint8_t> request_data;
-                    
-                    // 调用远程服务
-                    std::vector<uint8_t> response_data;
-                    if (!callRemoteService(info, request_data, response_data, 
-                                         info->config.timeout_ms)) {
-                        res.success = false;
-                        res.message = "Remote service call failed";
-                        return false;
-                    }
-                    
-                    // 反序列化响应
-                    if (response_data.size() >= 5) {
-                        res.success = response_data[0] != 0;
-                        
-                        uint32_t msg_len;
-                        memcpy(&msg_len, response_data.data() + 1, 4);
-                        
-                        if (response_data.size() >= 5 + msg_len) {
-                            res.message = std::string(
-                                response_data.begin() + 5,
-                                response_data.begin() + 5 + msg_len);
-                        }
-                    } else {
-                        res.success = false;
-                        res.message = "Invalid response format";
-                    }
-                    
-                    return true;
-                }
-            )
-        );
-        
-        LOG_INFOF("Created ROS service proxy: %s (type: %s)", 
-                 service_name.c_str(), service_type.c_str());
-        
     } else {
-        LOG_WARNF("Unsupported service type for ROS proxy: %s", service_type.c_str());
+        LOG_ERRORF("Failed to create ROS service proxy: %s", service_name.c_str());
     }
 }
 
@@ -542,20 +469,33 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
     
     for (int attempt = 0; attempt <= retries; attempt++) {
         try {
-            // 从连接池获取连接
-            auto conn = info->connection_pool->getConnection(
-                connect_address, timeout_ms);
+            // 为每次调用创建新的REQ套接字
+            // REQ-REP模式要求严格的请求-响应配对
+            auto transport = std::make_shared<ZmqTransport>(
+                context_, ZmqTransport::SocketType::REQ);
             
-            if (!conn.get()) {
-                LOG_ERROR("Failed to get connection from pool");
+            // 设置套接字选项
+            int linger = 0;
+            transport->setOption(ZMQ_LINGER, linger);
+            
+            // 不要在套接字上设置接收超时，让poll控制超时
+            // transport->setOption(ZMQ_RCVTIMEO, timeout_ms);
+            
+            // 连接到服务器
+            if (!transport->connect(connect_address)) {
+                LOG_ERRORF("Failed to connect to %s", connect_address.c_str());
+                info->stats.errors++;
                 continue;
             }
+            
+            // 给连接一点时间建立（ZMQ的异步连接特性）
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             
             LOG_DEBUGF("Sending service request to %s (%zu bytes)", 
                       connect_address.c_str(), request.size());
             
             // 发送请求
-            if (!conn->send(request)) {
+            if (!transport->send(request)) {
                 LOG_ERROR("Failed to send service request");
                 info->stats.errors++;
                 continue;
@@ -564,7 +504,7 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
             info->stats.bytes_sent += request.size();
             
             // 接收响应
-            if (!conn->receive(response, timeout_ms)) {
+            if (!transport->receive(response, timeout_ms)) {
                 LOG_ERROR("Service call timeout");
                 info->stats.errors++;
                 continue;
@@ -573,9 +513,9 @@ bool ServiceManager::retryServiceCall(RequestServiceInfo* info,
             LOG_DEBUGF("Received service response from %s (%zu bytes)", 
                       connect_address.c_str(), response.size());
             
-            // 检查响应是否为空
-            if (response.empty()) {
-                LOG_ERROR("Received empty response");
+            // 检查响应是否为空或错误标记
+            if (response.empty() || (response.size() == 1 && response[0] == 0)) {
+                LOG_ERROR("Received error response");
                 info->stats.errors++;
                 
                 if (attempt < retries) {

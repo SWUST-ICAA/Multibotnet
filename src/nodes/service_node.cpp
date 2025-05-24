@@ -55,6 +55,20 @@ int main(int argc, char** argv) {
                   "Please ensure that the parameter is correctly set in the launch file");
         return 1;
     }
+// 设置日志级别
+    std::string log_level_str = "info";
+    nh.param("log_level", log_level_str, std::string("info"));
+    
+    if (log_level_str == "debug") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::DEBUG);
+        ROS_INFO("Log level set to DEBUG");
+    } else if (log_level_str == "info") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::INFO);
+    } else if (log_level_str == "warn") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::WARN);
+    } else if (log_level_str == "error") {
+        multibotnet::Logger::getInstance().setLevel(multibotnet::LogLevel::ERROR);
+    }
     
     // 延时启动（给话题节点时间启动）
     ros::Duration(2).sleep();
