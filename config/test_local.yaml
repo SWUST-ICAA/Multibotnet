@@ -33,7 +33,7 @@ send_topics:
     max_frequency: 10
     bind_address: self
     port: 3003
-    compression: false
+    compression: true
     batch: false
 
 # 接收话题配置（通过localhost接收，模拟从其他机器人接收）
