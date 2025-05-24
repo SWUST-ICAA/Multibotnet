@@ -8,10 +8,11 @@
 
 ### 🚀 核心特性
 
-1. **动态消息类型支持**
-   - 无需修改代码即可支持任意ROS消息类型
+1. **灵活的消息和服务支持**
+   - **话题通信**: 支持任意ROS消息类型，无需修改代码
+   - **服务通信**: 内置常用服务类型，可方便扩展新类型
    - 基于ROS反射机制的运行时类型识别
-   - 配置文件驱动，灵活扩展
+   - 配置文件驱动，灵活配置
 
 2. **高性能优化**
    - **消息压缩**: 支持LZ4、ZLIB等多种压缩算法，自动选择最优方案
@@ -119,17 +120,42 @@ roslaunch multibotnet multibotnet.launch config_file:=config/my_robot.yaml
 
 ### 3. 高级用法
 
-#### 使用自定义消息类型
+#### 使用任意ROS消息类型（话题通信）
 
-无需修改代码，直接在配置文件中指定：
+话题通信支持任意ROS消息类型，无需修改代码，直接在配置文件中指定：
 
 ```yaml
 send_topics:
   - topic: /my_custom_data
-    message_type: my_package/MyCustomMsg
+    message_type: my_package/MyCustomMsg  # 支持任意消息类型
     max_frequency: 10
     bind_address: self
     port: 3002
+
+recv_topics:
+  - topic: /remote_custom_data
+    message_type: my_package/MyCustomMsg
+    connect_address: robot_peer
+    port: 3002
+```
+
+#### 使用服务通信
+
+服务通信支持以下内置类型，使用其他服务类型需要按照下文说明添加：
+
+```yaml
+# 使用内置服务类型
+provide_services:
+  - service_name: /set_mode
+    service_type: std_srvs/SetBool    # 内置支持
+    bind_address: self
+    port: 5001
+
+request_services:
+  - service_name: /remote/set_mode
+    service_type: std_srvs/SetBool
+    connect_address: robot_peer
+    port: 5001
 ```
 
 #### 启用性能监控
@@ -141,82 +167,125 @@ roslaunch multibotnet multibotnet.launch \
   statistics_interval:=5.0
 ```
 
-## 🔧 添加新的服务类型
+## 📦 内置支持的类型
 
-Multibotnet v4.0.0 已经支持以下内置服务类型：
+### 话题消息类型
+- **支持任意ROS消息类型**：使用 `topic_tools::ShapeShifter` 动态处理，无需预先定义
+
+### 服务类型（内置支持）
 - `std_srvs/SetBool`
 - `std_srvs/Trigger`
 - `std_srvs/Empty`
 - `nav_msgs/GetPlan`
 - `nav_msgs/GetMap`
 
-### 添加新服务类型的步骤
+> **注意**：使用其他服务类型需要手动添加支持，请参考下一节。
 
-如果需要支持新的服务类型，按以下步骤操作：
+## 🔧 添加新的服务类型
 
-#### 1. 修改 `core/service_factory.hpp`
+由于ROS服务的特殊性，新的服务类型需要手动添加支持。以下是详细步骤，以添加 `geometry_msgs/SetPose` 服务为例：
 
-在文件顶部添加新服务类型的头文件：
+### 步骤 1: 修改 `core/service_factory.hpp`
+
+#### 1.1 添加服务头文件
+在文件顶部的include部分添加：
 
 ```cpp
-// 添加新的服务类型头文件
-#include <your_package/YourService.h>
+// 现有的头文件
+#include <std_srvs/SetBool.h>
+#include <std_srvs/Trigger.h>
+#include <std_srvs/Empty.h>
+#include <nav_msgs/GetPlan.h>
+#include <nav_msgs/GetMap.h>
+
+// 添加新的服务头文件
+#include <geometry_msgs/SetPose.h>  // 新增这一行
 ```
 
-#### 2. 修改 `core/service_factory.cpp`
+#### 1.2 声明处理函数
+在 `ServiceFactory` 类的私有成员部分添加：
 
-##### 2.1 在 `registerBuiltinServices()` 中注册新服务类型
+```cpp
+private:
+    // ... 现有的成员变量 ...
+    
+    // 注册内置服务类型
+    void registerBuiltinServices();
+    
+    // std_srvs服务处理函数
+    LocalServiceHandler createSetBoolHandler(const std::string& service_name);
+    LocalServiceHandler createTriggerHandler(const std::string& service_name);
+    LocalServiceHandler createEmptyHandler(const std::string& service_name);
+    
+    // nav_msgs服务处理函数
+    LocalServiceHandler createGetPlanHandler(const std::string& service_name);
+    LocalServiceHandler createGetMapHandler(const std::string& service_name);
+    
+    // 新增：geometry_msgs服务处理函数
+    LocalServiceHandler createSetPoseHandler(const std::string& service_name);  // 新增这一行
+};
+```
+
+### 步骤 2: 修改 `core/service_factory.cpp`
+
+#### 2.1 在 `registerBuiltinServices()` 中注册新服务
+
+找到 `registerBuiltinServices()` 函数，添加新服务的注册：
 
 ```cpp
 void ServiceFactory::registerBuiltinServices() {
-    // ... 现有的注册代码 ...
+    // 注册 std_srvs 服务类型
+    registerServiceType("std_srvs/SetBool", 
+        [this](const std::string& name) { return createSetBoolHandler(name); });
     
-    // 注册新的服务类型
-    registerServiceType("your_package/YourService",
-        [this](const std::string& name) { return createYourServiceHandler(name); });
+    registerServiceType("std_srvs/Trigger",
+        [this](const std::string& name) { return createTriggerHandler(name); });
+    
+    registerServiceType("std_srvs/Empty",
+        [this](const std::string& name) { return createEmptyHandler(name); });
+    
+    // 注册 nav_msgs 服务类型
+    registerServiceType("nav_msgs/GetPlan",
+        [this](const std::string& name) { return createGetPlanHandler(name); });
+    
+    registerServiceType("nav_msgs/GetMap",
+        [this](const std::string& name) { return createGetMapHandler(name); });
+    
+    // 新增：注册 geometry_msgs 服务类型
+    registerServiceType("geometry_msgs/SetPose",
+        [this](const std::string& name) { return createSetPoseHandler(name); });
     
     LOG_INFO("Registered built-in service types");
 }
 ```
 
-##### 2.2 声明处理函数（在私有成员中）
+#### 2.2 实现处理函数
 
-在 `service_factory.hpp` 的私有成员部分添加：
-
-```cpp
-private:
-    // ... 现有的声明 ...
-    
-    // 新服务的处理函数
-    LocalServiceHandler createYourServiceHandler(const std::string& service_name);
-```
-
-##### 2.3 实现处理函数
-
-在 `service_factory.cpp` 中添加：
+在文件末尾添加新服务的处理函数实现：
 
 ```cpp
-ServiceFactory::LocalServiceHandler ServiceFactory::createYourServiceHandler(
+// geometry_msgs/SetPose 处理器
+ServiceFactory::LocalServiceHandler ServiceFactory::createSetPoseHandler(
     const std::string& service_name) {
     
     return [this, service_name](const std::vector<uint8_t>& req_data,
                                std::vector<uint8_t>& res_data) -> bool {
         try {
             // 反序列化请求
-            your_package::YourService::Request req;
+            geometry_msgs::SetPose::Request req;
             if (!deserializeRequest(req_data, req)) {
-                LOG_ERROR("Failed to deserialize YourService request");
+                LOG_ERROR("Failed to deserialize SetPose request");
                 return false;
             }
             
             // 调用本地ROS服务
-            ros::ServiceClient client = nh_.serviceClient<your_package::YourService>(service_name);
+            ros::ServiceClient client = nh_.serviceClient<geometry_msgs::SetPose>(service_name);
             if (!client.exists()) {
                 LOG_ERRORF("Service %s does not exist", service_name.c_str());
                 return false;
             }
             
-            your_package::YourService srv;
+            geometry_msgs::SetPose srv;
             srv.request = req;
             
             if (client.call(srv)) {
@@ -228,31 +297,24 @@ ServiceFactory::LocalServiceHandler ServiceFactory::createYourServiceHandler(
                 return false;
             }
         } catch (const std::exception& e) {
-            LOG_ERRORF("Exception in YourService handler: %s", e.what());
+            LOG_ERRORF("Exception in SetPose handler: %s", e.what());
             return false;
         }
     };
 }
 ```
 
-##### 2.4 在 `createServiceServer()` 中添加新服务类型的处理
+#### 2.3 在 `createServiceServer()` 中添加服务类型处理
+
+找到 `createServiceServer()` 函数，在服务类型判断的最后（`else` 语句之前）添加：
 
 ```cpp
-ros::ServiceServer ServiceFactory::createServiceServer(
-    const std::string& service_name,
-    const std::string& service_type,
-    const ServiceHandler& remote_handler) {
-    
-    std::lock_guard<std::mutex> lock(mutex_);
-    
-    // ... 现有的代码 ...
-    
-    } else if (service_type == "your_package/YourService") {
+    } else if (service_type == "geometry_msgs/SetPose") {
         auto server = nh_.advertiseService(service_name,
-            boost::function<bool(your_package::YourService::Request&,
-                               your_package::YourService::Response&)>(
-                [remote_handler](your_package::YourService::Request& req,
-                               your_package::YourService::Response& res) -> bool {
+            boost::function<bool(geometry_msgs::SetPose::Request&,
+                               geometry_msgs::SetPose::Response&)>(
+                [remote_handler](geometry_msgs::SetPose::Request& req,
+                               geometry_msgs::SetPose::Response& res) -> bool {
                     // 序列化请求
                     auto req_data = serializeRequest(req);
                     
@@ -275,95 +337,55 @@ ros::ServiceServer ServiceFactory::createServiceServer(
         return server;
         
     } else {
-        // ... 现有的代码 ...
+        LOG_WARNF("Unsupported service type for server: %s", service_type.c_str());
+        return ros::ServiceServer();
     }
-}
 ```
 
-#### 3. 更新 CMakeLists.txt
+### 步骤 3: 更新 CMakeLists.txt（如果需要）
 
 如果新服务类型来自外部包，需要在 `CMakeLists.txt` 中添加依赖：
 
 ```cmake
 find_package(catkin REQUIRED COMPONENTS
-  # ... 现有的组件 ...
-  your_package  # 添加包含新服务类型的包
+  roscpp
+  std_msgs
+  geometry_msgs  # 通常已经包含
+  sensor_msgs
+  nav_msgs
+  std_srvs
+  topic_tools
+  roslib
+  # your_package  # 如果服务来自自定义包，添加这一行
 )
 ```
 
-#### 4. 重新编译
+### 步骤 4: 重新编译
 
 ```bash
 cd ~/catkin_ws
 catkin_make
 ```
 
-#### 5. 在配置文件中使用新服务
+### 步骤 5: 在配置文件中使用新服务
 
-现在可以在配置文件中使用新的服务类型：
+现在可以在配置文件中使用新添加的服务类型：
 
 ```yaml
+# 提供 geometry_msgs/SetPose 服务
 provide_services:
-  - service_name: /my_custom_service
-    service_type: your_package/YourService
+  - service_name: /robot/set_pose
+    service_type: geometry_msgs/SetPose
     bind_address: self
-    port: 5003
+    port: 5010
 
+# 请求远程的 geometry_msgs/SetPose 服务
 request_services:
-  - service_name: /remote/my_custom_service
-    service_type: your_package/YourService
+  - service_name: /remote_robot/set_pose
+    service_type: geometry_msgs/SetPose
     connect_address: robot_peer
-    port: 5003
+    port: 5010
     timeout_ms: 5000
-```
-
-### 示例：添加 geometry_msgs/SetPose 服务
-
-以下是一个完整的示例，展示如何添加 `geometry_msgs/SetPose` 服务支持：
-
-```cpp
-// 1. 在 service_factory.hpp 添加头文件
-#include <geometry_msgs/SetPose.h>
-
-// 2. 在 registerBuiltinServices() 中注册
-registerServiceType("geometry_msgs/SetPose",
-    [this](const std::string& name) { return createSetPoseHandler(name); });
-
-// 3. 实现处理函数
-ServiceFactory::LocalServiceHandler ServiceFactory::createSetPoseHandler(
-    const std::string& service_name) {
-    
-    return [this, service_name](const std::vector<uint8_t>& req_data,
-                               std::vector<uint8_t>& res_data) -> bool {
-        try {
-            geometry_msgs::SetPose::Request req;
-            if (!deserializeRequest(req_data, req)) {
-                LOG_ERROR("Failed to deserialize SetPose request");
-                return false;
-            }
-            
-            ros::ServiceClient client = nh_.serviceClient<geometry_msgs::SetPose>(service_name);
-            if (!client.exists()) {
-                LOG_ERRORF("Service %s does not exist", service_name.c_str());
-                return false;
-            }
-            
-            geometry_msgs::SetPose srv;
-            srv.request = req;
-            
-            if (client.call(srv)) {
-                res_data = serializeResponse(srv.response);
-                return true;
-            } else {
-                LOG_ERRORF("Failed to call service %s", service_name.c_str());
-                return false;
-            }
-        } catch (const std::exception& e) {
-            LOG_ERRORF("Exception in SetPose handler: %s", e.what());
-            return false;
-        }
-    };
-}
 ```
 
 ## 📊 性能优化指南
@@ -472,6 +494,16 @@ request_services:
    - 降低发送频率
    - 检查网络稳定性
 
+4. **批处理错误**
+   - 确保发送和接收端的配置一致
+   - 检查消息大小是否适合批处理
+   - 查看日志中的错误信息
+
+5. **服务类型不支持**
+   - 检查服务类型是否在内置列表中
+   - 按照"添加新的服务类型"章节添加支持
+   - 确保正确编译和配置
+
 ### 调试工具
 
 ```bash
@@ -483,7 +515,31 @@ rosnode info /multibotnet_topic_node
 
 # 查看详细日志
 export ROSCONSOLE_CONFIG_FILE=`rospack find multibotnet`/config/rosconsole_debug.conf
+
+# 测试ZMQ连接
+cd ~/catkin_ws/src/multibotnet/Scripts
+python zmq_diagnostic.py
+
+# 测试话题通信
+python topic_test.py
+
+# 测试服务通信
+python service_test.py
 ```
+
+## 📋 架构说明
+
+### 话题通信架构
+- 使用 `topic_tools::ShapeShifter` 实现动态消息类型支持
+- 发送时自动序列化消息并附加类型信息
+- 接收时根据类型信息动态创建发布者
+- 支持任意ROS消息类型，无需预定义
+
+### 服务通信架构
+- 使用工厂模式管理服务类型
+- 每种服务类型需要注册处理函数
+- 支持本地服务和远程服务的双向代理
+- 可通过简单步骤扩展新服务类型
 
 ## 🤝 贡献指南
 
@@ -494,6 +550,13 @@ export ROSCONSOLE_CONFIG_FILE=`rospack find multibotnet`/config/rosconsole_debug
 3. 提交更改 (`git commit -m 'Add amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 创建 Pull Request
+
+### 贡献新的服务类型支持
+如果您添加了新的服务类型支持，请：
+1. 遵循现有代码风格
+2. 添加必要的注释
+3. 在PR中说明添加的服务类型
+4. 提供使用示例
 
 ## 📄 许可证
 
