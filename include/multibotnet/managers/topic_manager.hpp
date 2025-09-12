@@ -100,6 +100,10 @@ private:
     bool enable_statistics_;
     int statistics_interval_ms_;
 
+    // 统计线程相关
+    std::thread statistics_thread_;
+    std::atomic<bool> statistics_running_;
+
     // 内部方法
     bool loadConfig(const std::string& config_file);
     void displayConfig();
@@ -124,6 +128,9 @@ private:
     std::vector<uint8_t> compressMessage(const std::vector<uint8_t>& data,
                                         CompressionType type);
     std::vector<uint8_t> decompressMessage(const std::vector<uint8_t>& data);
+
+    // 统计线程函数
+    void statisticsLoop();
 };
 
 } // namespace multibotnet

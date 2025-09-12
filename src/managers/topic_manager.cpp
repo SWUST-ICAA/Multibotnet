@@ -13,9 +13,12 @@ namespace multibotnet {
 TopicManager::TopicManager() 
     : context_(1),
       running_(false),
+      statistics_running_(false),
       thread_pool_size_(0),
       max_retries_(3),
-      retry_interval_ms_(1000) {
+      retry_interval_ms_(1000),
+      enable_statistics_(false),
+      statistics_interval_ms_(5000) {
     message_factory_ = std::make_unique<MessageFactory>();
     compression_manager_ = &CompressionManager::getInstance();
 }
@@ -65,6 +68,13 @@ void TopicManager::start() {
     // 给接收线程一些时间来启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+    // 启动统计线程（如果启用）
+    if (enable_statistics_ && statistics_interval_ms_ > 0) {
+        statistics_running_ = true;
+        statistics_thread_ = std::thread(&TopicManager::statisticsLoop, this);
+        LOG_INFOF("Statistics enabled with interval %d ms", statistics_interval_ms_);
+    }
+
     LOG_INFO("TopicManager started successfully");
 }
 
@@ -74,6 +84,14 @@ void TopicManager::stop() {
     }
 
     running_ = false;
+
+    // 停止统计线程
+    if (statistics_running_) {
+        statistics_running_ = false;
+        if (statistics_thread_.joinable()) {
+            statistics_thread_.join();
+        }
+    }
 
     // 停止线程池
     if (thread_pool_) {
@@ -93,6 +111,25 @@ void TopicManager::stop() {
     }
 
     LOG_INFO("TopicManager stopped");
+}
+
+void TopicManager::statisticsLoop() {
+    LOG_INFO("Statistics thread started");
+
+    while (statistics_running_ && running_) {
+        // 等待指定的间隔时间
+        std::this_thread::sleep_for(std::chrono::milliseconds(statistics_interval_ms_));
+
+        // 检查是否仍在运行
+        if (!statistics_running_ || !running_) {
+            break;
+        }
+
+        // 打印统计信息
+        printStatistics();
+    }
+
+    LOG_INFO("Statistics thread stopped");
 }
 
 std::unordered_map<std::string, Statistics> TopicManager::getStatistics() const {
@@ -208,7 +245,7 @@ bool TopicManager::loadConfig(const std::string& config_file) {
         max_retries_ = advanced.max_retries;
         retry_interval_ms_ = advanced.retry_interval_ms;
 
-        // 保存高级配置用于显示
+        // 保存高级配置用于显示和统计
         enable_compression_ = advanced.enable_compression;
         compression_type_ = advanced.compression_type;
         compression_level_ = advanced.compression_level;
@@ -251,10 +288,12 @@ void TopicManager::displayConfig() {
     ss << YELLOW << "  Thread Pool:" << RESET << std::endl;
     ss << "    Size: " << thread_pool_size_ << " threads" << std::endl;
 
-    // 性能监控
+    // 性能监控 - 显示来自配置文件的设置
     ss << YELLOW << "  Performance:" << RESET << std::endl;
-    ss << "    Statistics: " << (enable_statistics_ ? "enabled" : "disabled") << std::endl;
-    ss << "    Interval: " << statistics_interval_ms_ << " ms" << std::endl;
+    ss << "    Statistics: " << (enable_statistics_ ? GREEN "enabled" RESET : "disabled") << std::endl;
+    if (enable_statistics_) {
+        ss << "    Interval: " << statistics_interval_ms_ << " ms" << std::endl;
+    }
 
     // 重试策略
     ss << YELLOW << "  Retry Policy:" << RESET << std::endl;
@@ -447,7 +486,7 @@ void TopicManager::processMessageAsync(SendTopicInfo* info,
         // 添加消息数据
         full_message.insert(full_message.end(), serialized.begin(), serialized.end());
 
-        // 压缩消息（如果可用）
+        // 压缩消息（如果启用）
         std::vector<uint8_t> data_to_send;
         if (info->config.enable_compression) {
             CompressionType comp_type = compression_manager_->recommendCompression(
