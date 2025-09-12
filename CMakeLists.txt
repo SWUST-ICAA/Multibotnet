@@ -12,14 +12,13 @@ endif()
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  std_msgs
-  geometry_msgs
-  sensor_msgs
-  nav_msgs
-  std_srvs
-  topic_tools
-  roslib
+        roscpp
+        std_msgs
+        geometry_msgs
+        sensor_msgs
+        nav_msgs
+        topic_tools
+        roslib
 )
 
 ## Find system dependencies
@@ -69,31 +68,30 @@ endif()
 
 ## Declare a catkin package
 catkin_package(
-  INCLUDE_DIRS 
-    include
-  LIBRARIES 
-    ${PROJECT_NAME}_core
-    ${PROJECT_NAME}_transport
-    ${PROJECT_NAME}_managers
-    ${PROJECT_NAME}_utils
-  CATKIN_DEPENDS 
-    roscpp 
-    std_msgs 
-    geometry_msgs 
-    sensor_msgs 
-    nav_msgs 
-    std_srvs
-    topic_tools
-    roslib
-  DEPENDS
-    YAML_CPP
+        INCLUDE_DIRS
+        include
+        LIBRARIES
+        ${PROJECT_NAME}_core
+        ${PROJECT_NAME}_transport
+        ${PROJECT_NAME}_managers
+        ${PROJECT_NAME}_utils
+        CATKIN_DEPENDS
+        roscpp
+        std_msgs
+        geometry_msgs
+        sensor_msgs
+        nav_msgs
+        topic_tools
+        roslib
+        DEPENDS
+        YAML_CPP
 )
 
 ## Specify additional locations of header files
 include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-  ${YAML_CPP_INCLUDE_DIRS}
+        include
+        ${catkin_INCLUDE_DIRS}
+        ${YAML_CPP_INCLUDE_DIRS}
 )
 
 ## Add compile definitions
@@ -109,104 +107,84 @@ endif()
 
 ## Core library
 add_library(${PROJECT_NAME}_core
-  src/core/message_factory.cpp
-  src/core/service_factory.cpp
+        src/core/message_factory.cpp
 )
 target_link_libraries(${PROJECT_NAME}_core
-  ${catkin_LIBRARIES}
+        ${catkin_LIBRARIES}
 )
 
 ## Transport library
 add_library(${PROJECT_NAME}_transport
-  src/transport/zmq_transport.cpp
-  src/transport/compression.cpp
-  src/transport/connection_pool.cpp
+        src/transport/zmq_transport.cpp
+        src/transport/compression.cpp
 )
 target_link_libraries(${PROJECT_NAME}_transport
-  ${catkin_LIBRARIES}
-  ${ZMQ_LIBRARY}
-  ${ZLIB_LIBRARIES}
-  ${LZ4_LIBRARIES}
+        ${catkin_LIBRARIES}
+        ${ZMQ_LIBRARY}
+        ${ZLIB_LIBRARIES}
+        ${LZ4_LIBRARIES}
 )
 
 ## Utils library
 add_library(${PROJECT_NAME}_utils
-  src/utils/thread_pool.cpp
-  src/utils/logger.cpp
-  src/utils/config_parser.cpp
+        src/utils/thread_pool.cpp
+        src/utils/logger.cpp
+        src/utils/config_parser.cpp
 )
 target_link_libraries(${PROJECT_NAME}_utils
-  ${catkin_LIBRARIES}
-  ${YAML_CPP_LIBRARIES}
+        ${catkin_LIBRARIES}
+        ${YAML_CPP_LIBRARIES}
 )
 
 ## Managers library
 add_library(${PROJECT_NAME}_managers
-  src/managers/topic_manager.cpp
-  src/managers/service_manager.cpp
+        src/managers/topic_manager.cpp
 )
 target_link_libraries(${PROJECT_NAME}_managers
-  ${PROJECT_NAME}_core
-  ${PROJECT_NAME}_transport
-  ${PROJECT_NAME}_utils
-  ${catkin_LIBRARIES}
-  ${ZMQ_LIBRARY}
+        ${PROJECT_NAME}_core
+        ${PROJECT_NAME}_transport
+        ${PROJECT_NAME}_utils
+        ${catkin_LIBRARIES}
+        ${ZMQ_LIBRARY}
 )
 
 ## Topic node executable
 add_executable(${PROJECT_NAME}_topic_node
-  src/nodes/topic_node.cpp
+        src/nodes/topic_node.cpp
 )
 target_link_libraries(${PROJECT_NAME}_topic_node
-  ${PROJECT_NAME}_managers
-  ${PROJECT_NAME}_core
-  ${PROJECT_NAME}_transport
-  ${PROJECT_NAME}_utils
-  ${catkin_LIBRARIES}
-  ${YAML_CPP_LIBRARIES}
-  ${ZMQ_LIBRARY}
-  ${LZ4_LIBRARIES}
-)
-
-## Service node executable
-add_executable(${PROJECT_NAME}_service_node
-  src/nodes/service_node.cpp
-)
-target_link_libraries(${PROJECT_NAME}_service_node
-  ${PROJECT_NAME}_managers
-  ${PROJECT_NAME}_core
-  ${PROJECT_NAME}_transport
-  ${PROJECT_NAME}_utils
-  ${catkin_LIBRARIES}
-  ${YAML_CPP_LIBRARIES}
-  ${ZMQ_LIBRARY}
-  ${LZ4_LIBRARIES}
+        ${PROJECT_NAME}_managers
+        ${PROJECT_NAME}_core
+        ${PROJECT_NAME}_transport
+        ${PROJECT_NAME}_utils
+        ${catkin_LIBRARIES}
+        ${YAML_CPP_LIBRARIES}
+        ${ZMQ_LIBRARY}
+        ${LZ4_LIBRARIES}
 )
 
 ## Add cmake target dependencies of the executables
 add_dependencies(${PROJECT_NAME}_topic_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(${PROJECT_NAME}_service_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Install
-install(TARGETS 
-  ${PROJECT_NAME}_core
-  ${PROJECT_NAME}_transport
-  ${PROJECT_NAME}_managers
-  ${PROJECT_NAME}_utils
-  ${PROJECT_NAME}_topic_node 
-  ${PROJECT_NAME}_service_node
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+install(TARGETS
+        ${PROJECT_NAME}_core
+        ${PROJECT_NAME}_transport
+        ${PROJECT_NAME}_managers
+        ${PROJECT_NAME}_utils
+        ${PROJECT_NAME}_topic_node
+        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.hpp"
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        FILES_MATCHING PATTERN "*.hpp"
 )
 
 install(DIRECTORY config launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
 ## Testing
