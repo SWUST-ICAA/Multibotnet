@@ -90,7 +90,7 @@ advanced:
   # 性能监控
   performance:
     enable_statistics: true           # 启用统计
-    statistics_interval_ms: 1000     # 每3秒显示一次统计
+    statistics_interval_ms: 1000     # 每1秒显示一次统计
 
   # 重试策略
   retry:

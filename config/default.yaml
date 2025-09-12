@@ -151,7 +151,7 @@ advanced:
       # true: 收集并显示性能数据
     # false: 关闭统计，略微提升性能
 
-    statistics_interval_ms: 5000     # 统计信息打印间隔（毫秒）
+    statistics_interval_ms: 1000     # 统计信息打印间隔（毫秒）
       # 1000 = 每1秒打印一次
     # 设置为0则不自动打印
 
