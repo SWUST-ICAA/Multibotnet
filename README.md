@@ -1,4 +1,4 @@
-# Multibotnet v4.1.1
+# Multibotnet v4.1.2
 
 [![ROS Version](https://img.shields.io/badge/ROS-Kinetic%20%7C%20Melodic%20%7C%20Noetic-blue.svg)](http://wiki.ros.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
