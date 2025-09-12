@@ -1,91 +1,192 @@
-# Multibotnet v4.2.0 Configuration File (Optimized Version)
+# Multibotnet v4.1.2 配置文件
 #
-# Features:
-# - Dynamic message type support
-# - Compression (LZ4/ZLIB)
-# - Thread pool parallel processing
-# - Auto-reconnect with configurable retry strategy
+# 这是一个示例配置文件，展示了Multibotnet的所有功能特性
+# 你可以复制此文件并根据自己的需求修改
+#
+# 主要特性:
+# - 支持任意ROS消息类型，无需修改代码
+# - 动态消息类型处理，自动识别和转换
+# - 高效压缩支持 (LZ4/ZLIB)
+# - 多线程并行处理，充分利用多核CPU
+# - 自动重连机制，网络中断后自动恢复
+# - 流量控制，防止网络拥塞
+# - 详细的性能统计和监控
 
-# IP地址映射
+# ==========================================
+# IP地址映射配置
+# ==========================================
+# 定义IP地址的别名，方便在配置中使用
+# 这样可以避免在多处重复写IP地址，修改时只需改一处
 IP:
-  self: '*'                    # '*' 表示绑定所有本机IP
-  localhost: '127.0.0.1'       # 本地回环
-  robot1: '192.168.101.101'    # 机器人1
-  robot2: '192.168.101.102'    # 机器人2
-  robot3: '192.168.101.103'    # 机器人3
-  server: '192.168.101.100'    # 中央服务器
+  # self: 特殊关键字，表示绑定本机所有可用IP地址
+  # 等同于 0.0.0.0，用于监听来自任何网络接口的连接
+  self: '*'
 
+  # localhost: 本地回环地址
+  # 用于同一台机器上的进程间通信，延迟最低
+  localhost: '127.0.0.1'
+
+  # 机器人IP映射
+  # 给每个机器人的IP地址起一个容易记忆的名字
+  # 修改时只需要在这里改IP，下面的配置都会自动更新
+  robot1: '192.168.101.101'    # 1号机器人
+  robot2: '192.168.101.102'    # 2号机器人
+  robot3: '192.168.101.103'    # 3号机器人
+
+  # 服务器IP映射
+  # 中央服务器或者控制站的地址
+  server: '192.168.101.100'    # 中央控制服务器
+
+# ==========================================
 # 发送话题配置
+# ==========================================
+# 配置本节点要发送到网络的ROS话题
+# 每个话题独立配置，可以有不同的设置
 send_topics:
-  # IMU数据发送
-  - topic: /imu
-    message_type: sensor_msgs/Imu
-    max_frequency: 50          # 最大发送频率(Hz)
-    bind_address: self         # 绑定地址(使用IP映射)
-    port: 3001
-    compression: true          # 启用压缩
+  # IMU数据发送配置
+  - topic: /imu                        # ROS话题名称（本地订阅的话题）
+    message_type: sensor_msgs/Imu      # 消息类型（必须准确，格式：包名/消息类型）
+    max_frequency: 50                  # 最大发送频率(Hz)
+      # 即使原始话题频率更高，也会限制在此频率
+    # 用于控制网络带宽使用
+    bind_address: self                 # 绑定地址，使用IP映射中的键名
+      # self = 监听所有网络接口
+    # 也可以指定具体IP限制访问
+    port: 3001                         # 监听端口号（1024-65535）
+      # 每个话题使用不同端口
+    # 避免使用常用端口(80,443,22等)
+    compression: true                  # 是否启用压缩
+      # true: 自动选择最佳压缩算法
+    # false: 不压缩，适合小数据或低延迟场景
 
-  # 速度命令发送
-  - topic: /cmd_vel
-    message_type: geometry_msgs/Twist
-    max_frequency: 40
+  # 速度控制命令发送配置
+  - topic: /cmd_vel                    # 机器人速度控制命令
+    message_type: geometry_msgs/Twist  # Twist消息类型
+    max_frequency: 40                  # 控制命令通常需要较高频率
     bind_address: self
-    port: 3002
-    compression: false        # 实时性要求高，不压缩
+    port: 3002                         # 使用不同的端口
+    compression: false                 # 控制命令要求低延迟，不压缩
 
-  # 激光雷达数据
-  - topic: /scan
+  # 激光雷达扫描数据
+  - topic: /scan                       # 2D激光雷达数据
     message_type: sensor_msgs/LaserScan
-    max_frequency: 10
+    max_frequency: 10                  # 激光雷达通常10Hz
     bind_address: self
     port: 3003
-    compression: true
+    compression: true                  # 扫描数据较大，建议压缩
 
-  # 点云数据
-  - topic: /velodyne_points
+  # 3D点云数据
+  - topic: /velodyne_points           # 3D激光雷达点云
     message_type: sensor_msgs/PointCloud2
-    max_frequency: 10
+    max_frequency: 10                  # 点云数据频率
     bind_address: self
     port: 3004
-    compression: true
+    compression: true                  # 点云数据很大，必须压缩
 
+# ==========================================
 # 接收话题配置
+# ==========================================
+# 配置从网络接收并发布到本地的ROS话题
+# 需要与发送端的配置匹配（消息类型和端口）
 recv_topics:
-  # 接收其他机器人的IMU数据
-  - topic: /robot1/imu
-    message_type: sensor_msgs/Imu
-    connect_address: robot1
-    port: 3001
+  # 接收来自robot1的IMU数据
+  - topic: /robot1/imu                 # 本地发布的话题名称
+    # 建议加前缀避免冲突
+    message_type: sensor_msgs/Imu      # 消息类型（必须与发送端一致）
+    connect_address: robot1            # 连接地址，使用IP映射的键名
+    # 会自动解析为 192.168.101.101
+    port: 3001                         # 端口号（必须与发送端一致）
 
+  # 接收来自robot2的IMU数据
   - topic: /robot2/imu
     message_type: sensor_msgs/Imu
-    connect_address: robot2
-    port: 3001
+    connect_address: robot2            # 连接到robot2
+    port: 3001                         # robot2的IMU也在3001端口
 
-  # 接收中央服务器的全局命令
-  - topic: /global_cmd_vel
+  # 接收中央服务器的全局速度命令
+  - topic: /global_cmd_vel            # 来自服务器的全局控制命令
     message_type: geometry_msgs/Twist
-    connect_address: server
-    port: 3002
+    connect_address: server            # 连接到中央服务器
+    port: 3002                         # 服务器的cmd_vel端口
 
+# ==========================================
 # 高级配置选项
+# ==========================================
+# 这些是全局设置，影响所有话题
+# 个别话题可以在自己的配置中覆盖这些设置
 advanced:
+  # ------------------------------------------
   # 压缩配置
+  # ------------------------------------------
   compression:
-    enable: true              # 全局启用压缩
-    type: lz4                 # 压缩算法: none, zlib, lz4
-    level: 6                  # 压缩级别(仅zlib): 1-9
+    enable: true                       # 全局压缩开关
+      # true: 默认启用压缩
+    # false: 默认不压缩
 
+    type: lz4                         # 压缩算法选择:
+      # none - 不压缩，零延迟
+      # zlib - 标准压缩，压缩率高，CPU占用中等
+    # lz4  - 高速压缩，压缩率中等，CPU占用低（推荐）
+
+    level: 6                          # 压缩级别 (1-9)
+      # 仅对zlib有效
+      # 1 = 最快速度，压缩率低
+      # 9 = 最高压缩率，速度慢
+    # 6 = 平衡选择（默认）
+
+  # ------------------------------------------
   # 线程池配置
+  # ------------------------------------------
   thread_pool:
-    size: 4                   # 线程数，0表示自动(CPU核心数)
+    size: 0                           # 工作线程数量
+      # 0 = 自动检测（使用CPU核心数）
+      # 建议设置为CPU核心数
+    # 更多线程 = 更高并发，但也更多开销
 
-  # 性能监控
+  # ------------------------------------------
+  # 性能监控配置
+  # ------------------------------------------
   performance:
-    enable_statistics: true   # 启用统计
-    statistics_interval_ms: 5000
+    enable_statistics: true           # 是否启用统计功能
+      # true: 收集并显示性能数据
+    # false: 关闭统计，略微提升性能
 
-  # 重试策略
+    statistics_interval_ms: 1000     # 统计信息打印间隔（毫秒）
+      # 1000 = 每1秒打印一次
+    # 设置为0则不自动打印
+
+  # ------------------------------------------
+  # 网络重连策略
+  # ------------------------------------------
   retry:
-    max_retries: 3            # 最大重试次数
-    interval_ms: 1000         # 重试间隔(毫秒)
+    max_retries: -1                   # 最大重试次数
+      # 网络断开后尝试重连的次数
+      # 0 = 不重试
+    # -1 = 无限重试
+
+    interval_ms: 1000                # 重试间隔（毫秒）
+      # 两次重试之间的等待时间
+    # 建议不小于500ms
+
+# ==========================================
+# 使用提示
+# ==========================================
+# 1. 端口选择：
+#    - 每个话题使用独立端口
+#    - 建议使用3000-9000范围
+#    - 避免系统保留端口(0-1024)
+#
+# 2. 压缩建议：
+#    - 大数据(点云/图像): 使用压缩
+#    - 控制命令: 不压缩（低延迟）
+#    - 带宽受限: 启用压缩
+#
+# 3. 频率设置：
+#    - 不要设置过高，够用即可
+#    - 考虑网络带宽限制
+#    - 控制类话题可以适当高一些
+#
+# 4. 调试技巧：
+#    - 先用test_local.yaml在本机测试
+#    - 检查防火墙设置
+#    - 使用rostopic echo检查数据

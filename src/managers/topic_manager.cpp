@@ -34,7 +34,6 @@ bool TopicManager::init(const std::string& config_file) {
         thread_pool_size_ = std::thread::hardware_concurrency();
     }
     thread_pool_ = std::make_unique<ThreadPool>(thread_pool_size_);
-    LOG_INFOF("Thread pool created with %d threads", thread_pool_size_);
 
     displayConfig();
     return true;
@@ -66,7 +65,7 @@ void TopicManager::start() {
     // 给接收线程一些时间来启动
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    LOG_INFO("TopicManager started");
+    LOG_INFO("TopicManager started successfully");
 }
 
 void TopicManager::stop() {
@@ -209,6 +208,13 @@ bool TopicManager::loadConfig(const std::string& config_file) {
         max_retries_ = advanced.max_retries;
         retry_interval_ms_ = advanced.retry_interval_ms;
 
+        // 保存高级配置用于显示
+        enable_compression_ = advanced.enable_compression;
+        compression_type_ = advanced.compression_type;
+        compression_level_ = advanced.compression_level;
+        enable_statistics_ = advanced.enable_statistics;
+        statistics_interval_ms_ = advanced.statistics_interval_ms;
+
         // 设置发送话题
         for (const auto& config : parser.getSendTopics()) {
             setupSendTopic(config);
@@ -230,19 +236,39 @@ void TopicManager::displayConfig() {
     std::stringstream ss;
 
     ss << std::endl;
-    ss << BLUE << "============ Topic Node Configuration ============" << RESET << std::endl;
+    ss << CYAN << "============ Topic Node Configuration ============" << RESET << std::endl;
 
-    ss << BLUE << "Advanced Settings:" << RESET << std::endl;
-    ss << "  Thread Pool: " << YELLOW << thread_pool_size_ << " threads" << RESET << std::endl;
-    ss << "  Reconnect: " << YELLOW << "max_retries=" << max_retries_
-       << ", interval=" << retry_interval_ms_ << "ms" << RESET << std::endl;
+    // 显示完整的高级设置
+    ss << std::endl << BLUE << "Advanced Settings:" << RESET << std::endl;
 
+    // 压缩配置
+    ss << YELLOW << "  Compression:" << RESET << std::endl;
+    ss << "    Enabled: " << (enable_compression_ ? "true" : "false") << std::endl;
+    ss << "    Type: " << compression_type_ << std::endl;
+    ss << "    Level: " << compression_level_ << " (zlib only)" << std::endl;
+
+    // 线程池配置
+    ss << YELLOW << "  Thread Pool:" << RESET << std::endl;
+    ss << "    Size: " << thread_pool_size_ << " threads" << std::endl;
+
+    // 性能监控
+    ss << YELLOW << "  Performance:" << RESET << std::endl;
+    ss << "    Statistics: " << (enable_statistics_ ? "enabled" : "disabled") << std::endl;
+    ss << "    Interval: " << statistics_interval_ms_ << " ms" << std::endl;
+
+    // 重试策略
+    ss << YELLOW << "  Retry Policy:" << RESET << std::endl;
+    ss << "    Max Retries: " << max_retries_ << std::endl;
+    ss << "    Retry Interval: " << retry_interval_ms_ << " ms" << std::endl;
+
+    // IP映射
     ss << std::endl << BLUE << "IP Mappings:" << RESET << std::endl;
     for (const auto& pair : ip_map_) {
         ss << "  " << YELLOW << pair.first << " -> " << pair.second << RESET << std::endl;
     }
 
-    ss << std::endl << BLUE << "Send Topics:" << RESET << std::endl;
+    // 发送话题
+    ss << std::endl << BLUE << "Send Topics (" << send_topics_.size() << "):" << RESET << std::endl;
     for (const auto& send_topic : send_topics_) {
         const auto& config = send_topic->config;
         std::string display_ip = resolveAddress(config.address);
@@ -251,21 +277,26 @@ void TopicManager::displayConfig() {
         }
 
         ss << "  " << GREEN << config.topic << RESET
-           << " [" << config.max_frequency << "Hz max] "
-           << "bind: " << display_ip << ":" << config.port
+           << " [" << config.max_frequency << "Hz] "
+           << "-> " << display_ip << ":" << config.port
            << (config.enable_compression ? " (compressed)" : "") << std::endl;
     }
 
-    ss << std::endl << BLUE << "Receive Topics:" << RESET << std::endl;
+    // 接收话题
+    ss << std::endl << BLUE << "Receive Topics (" << recv_topics_.size() << "):" << RESET << std::endl;
     for (const auto& recv_topic : recv_topics_) {
         const auto& config = recv_topic->config;
         ss << "  " << GREEN << config.topic << RESET
            << " <- " << config.address << ":" << config.port << std::endl;
     }
 
-    ss << BLUE << "=================================================" << RESET << std::endl;
+    ss << CYAN << "=================================================" << RESET << std::endl;
 
     std::cout << ss.str() << std::flush;
+
+    // 只打印一次通用的重连策略信息
+    LOG_INFOF("All topics configured with reconnect policy: max_retries=%d, interval=%dms",
+             max_retries_, retry_interval_ms_);
 }
 
 std::string TopicManager::resolveAddress(const std::string& address_key) {
@@ -319,8 +350,8 @@ void TopicManager::setupSendTopic(const TopicConfig& config) {
         info->transport = std::make_shared<ZmqTransport>(
             context_, ZmqTransport::SocketType::PUB);
 
-        // 设置重连策略
-        info->transport->setReconnectPolicy(max_retries_, retry_interval_ms_);
+        // 设置重连策略（静默设置，不打印日志）
+        info->transport->setReconnectPolicy(max_retries_, retry_interval_ms_, true);
         info->transport->enableAutoReconnect(true);
 
         // 设置套接字选项
@@ -350,7 +381,7 @@ void TopicManager::setupSendTopic(const TopicConfig& config) {
         );
 
         send_topics_.push_back(std::move(info));
-        LOG_INFO("Setup send topic: " + config.topic + " on " + bind_address);
+        LOG_DEBUGF("Setup send topic: %s on %s", config.topic.c_str(), bind_address.c_str());
 
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup send topic " + config.topic + ": " + e.what());
@@ -416,7 +447,7 @@ void TopicManager::processMessageAsync(SendTopicInfo* info,
         // 添加消息数据
         full_message.insert(full_message.end(), serialized.begin(), serialized.end());
 
-        // 压缩消息（如果启用）
+        // 压缩消息（如果可用）
         std::vector<uint8_t> data_to_send;
         if (info->config.enable_compression) {
             CompressionType comp_type = compression_manager_->recommendCompression(
@@ -470,8 +501,8 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->transport = std::make_shared<ZmqTransport>(
             context_, ZmqTransport::SocketType::SUB);
 
-        // 设置重连策略
-        info->transport->setReconnectPolicy(max_retries_, retry_interval_ms_);
+        // 设置重连策略（静默设置，不打印日志）
+        info->transport->setReconnectPolicy(max_retries_, retry_interval_ms_, true);
         info->transport->enableAutoReconnect(true);
 
         // 设置套接字选项
@@ -502,8 +533,10 @@ void TopicManager::setupRecvTopic(const TopicConfig& config) {
         info->transport->subscribe("");
 
         recv_topics_.push_back(std::move(info));
-        LOG_INFO("Setup recv topic: " + config.topic +
-                " connected to " + connect_address);
+        LOG_DEBUGF("Setup recv topic: %s [%s] from %s",
+                  config.topic.c_str(),
+                  config.message_type.c_str(),
+                  connect_address.c_str());
 
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to setup recv topic " + config.topic + ": " + e.what());
@@ -524,12 +557,13 @@ void TopicManager::recvTopicLoop(RecvTopicInfo* info) {
                 continue;
             }
 
-            // 首次接收时打印日志
+            // 首次接收时打印日志（合并打印）- 修改这里添加消息类型
             if (info->first_message) {
                 std::lock_guard<std::mutex> lock(log_mutex);
                 if (logged_topics.find(info->config.topic) == logged_topics.end()) {
-                    LOG_INFO("--->[multibotnet_topic_node] \"" +
-                            info->config.topic + "\" received!<---");
+                    LOG_INFOF("Topic '%s' [%s] receiving data from network",
+                             info->config.topic.c_str(),
+                             info->config.message_type.c_str());  // 添加消息类型显示
                     logged_topics.insert(info->config.topic);
                 }
                 info->first_message = false;

@@ -93,6 +93,13 @@ private:
     int max_retries_;
     int retry_interval_ms_;
 
+    // 高级配置参数（用于显示）
+    bool enable_compression_;
+    std::string compression_type_;
+    int compression_level_;
+    bool enable_statistics_;
+    int statistics_interval_ms_;
+
     // 内部方法
     bool loadConfig(const std::string& config_file);
     void displayConfig();

@@ -1,72 +1,120 @@
-# Multibotnet v4.2.0 本地回环测试配置 (Optimized Version)
-# 用于在单机上测试话题通信
+# Multibotnet v4.1.2 本地回环测试配置
+#
+# 这个配置文件用于在单机上测试Multibotnet的功能
+# 所有通信都在本地进行，不需要网络连接
+# 非常适合开发和调试阶段使用
+#
+# 测试方法：
+# 1. 启动通信节点: roslaunch multibotnet test_local.launch
+# 2. 运行测试脚本: rosrun multibotnet topic_test.py
+# 3. 查看接收话题: rostopic list | grep topic_test
+# 4. 监听数据: rostopic echo /topic_test/imu
 
-# IP地址映射
+# ==========================================
+# IP地址映射（本地测试）
+# ==========================================
 IP:
+  # 本地测试只需要这两个地址
   self: '*'                    # 绑定所有本机IP
-  localhost: '127.0.0.1'       # 本地回环
+  localhost: '127.0.0.1'       # 本地回环地址
 
-# 发送话题配置
+# ==========================================
+# 发送话题配置（本地测试）
+# ==========================================
+# 这些话题会被发送到本地端口
+# 然后立即被接收话题配置接收
 send_topics:
-  # IMU数据
-  - topic: /imu
-    message_type: sensor_msgs/Imu
-    max_frequency: 50
-    bind_address: self
-    port: 3001
-    compression: true
+  # IMU数据测试
+  - topic: /imu                        # 测试IMU数据传输
+    message_type: sensor_msgs/Imu      # IMU消息类型
+    max_frequency: 50                  # 测试高频率数据
+    bind_address: self                 # 绑定本地
+    port: 3001                         # 本地端口
+    compression: true                  # 测试压缩功能
 
-  # 速度命令
-  - topic: /cmd_vel
+  # 速度命令测试
+  - topic: /cmd_vel                    # 测试Twist消息
     message_type: geometry_msgs/Twist
     max_frequency: 40
     bind_address: self
     port: 3002
-    compression: true
+    compression: true                  # 本地测试可以都开启压缩
 
-  # 激光雷达数据
-  - topic: /scan
+  # 激光雷达数据测试
+  - topic: /scan                       # 测试LaserScan消息
     message_type: sensor_msgs/LaserScan
     max_frequency: 10
     bind_address: self
     port: 3003
     compression: true
 
-# 接收话题配置
+# ==========================================
+# 接收话题配置（本地测试）
+# ==========================================
+# 从本地端口接收数据并发布到带前缀的话题
+# 前缀 /topic_test/ 用于区分原始话题和转发后的话题
 recv_topics:
-  - topic: /topic_test/imu
+  # 接收本地IMU数据
+  - topic: /topic_test/imu            # 加前缀避免与原始话题冲突
     message_type: sensor_msgs/Imu
-    connect_address: localhost
-    port: 3001
+    connect_address: localhost        # 连接到本地
+    port: 3001                        # 对应发送端口
 
+  # 接收本地速度命令
   - topic: /topic_test/cmd_vel
     message_type: geometry_msgs/Twist
     connect_address: localhost
     port: 3002
 
+  # 接收本地激光数据
   - topic: /topic_test/scan
     message_type: sensor_msgs/LaserScan
     connect_address: localhost
     port: 3003
 
-# 高级配置选项
+# ==========================================
+# 高级配置（本地测试优化）
+# ==========================================
 advanced:
   # 压缩配置
   compression:
-    enable: true
-    type: lz4
-    level: 6
+    enable: true                      # 测试压缩功能
+    type: lz4                         # 使用LZ4快速压缩
+    level: 6                          # 中等压缩级别
 
   # 线程池配置
   thread_pool:
-    size: 4                   # 使用4个线程
+    size: 4                           # 使用4个线程
+    # 本地测试不需要太多线程
 
   # 性能监控
   performance:
-    enable_statistics: true
-    statistics_interval_ms: 5000
+    enable_statistics: false           # 启用统计
+    statistics_interval_ms: 1000     # 每1秒显示一次统计
 
   # 重试策略
   retry:
-    max_retries: 3
-    interval_ms: 500          # 本地测试，重试间隔短一些
+    max_retries: 3                   # 本地测试少量重试即可
+    interval_ms: 500                 # 本地重试间隔可以短一些
+
+# ==========================================
+# 测试说明
+# ==========================================
+# 这个配置会创建一个本地回环测试：
+#
+# 数据流程：
+# 1. topic_test.py 发布数据到 /imu, /cmd_vel, /scan
+# 2. Multibotnet 订阅这些话题
+# 3. 通过ZMQ在本地传输（经过序列化和压缩）
+# 4. Multibotnet 接收并反序列化
+# 5. 发布到 /topic_test/imu, /topic_test/cmd_vel, /topic_test/scan
+#
+# 验证方法：
+# - 比较原始话题和转发话题的数据是否一致
+# - 检查统计信息中的收发成功率
+# - 监控CPU和内存使用情况
+#
+# 常见问题：
+# - 如果没有收到数据，检查topic_test.py是否运行
+# - 如果数据不一致，可能是消息类型配置错误
+# - 如果延迟大，尝试关闭压缩

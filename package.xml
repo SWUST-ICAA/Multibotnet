@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>multibotnet</name>
-  <version>4.1.0</version>
+  <version>4.1.2</version>
   <description>
     A high-performance ROS package for distributed multi-robot communication using ZeroMQ.
     Features dynamic message type support, compression, batching, connection pooling,

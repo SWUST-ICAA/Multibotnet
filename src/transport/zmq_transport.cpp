@@ -37,7 +37,7 @@ bool ZmqTransport::bind(const std::string& address) {
         last_address_ = address;
         is_bind_ = true;
         state_ = ConnectionState::CONNECTED;
-        LOG_INFOF("Successfully bound to %s", address.c_str());
+        LOG_DEBUGF("Successfully bound to %s", address.c_str());
         return true;
     } catch (const zmq::error_t& e) {
         state_ = ConnectionState::ERROR;
@@ -58,7 +58,7 @@ bool ZmqTransport::connect(const std::string& address) {
         state_ = ConnectionState::ERROR;
         LOG_ERRORF("Failed to connect to %s: %s", address.c_str(), e.what());
 
-        // 如果启用自动重连，尝试重连
+        // 如果可用自动重连，尝试重连
         if (auto_reconnect_) {
             return tryReconnect();
         }
@@ -224,11 +224,15 @@ void ZmqTransport::subscribe(const std::string& filter) {
     socket_.setsockopt(ZMQ_SUBSCRIBE, filter.c_str(), filter.size());
 }
 
-void ZmqTransport::setReconnectPolicy(int max_retries, int retry_interval_ms) {
+void ZmqTransport::setReconnectPolicy(int max_retries, int retry_interval_ms, bool silent) {
     max_retries_ = max_retries;
     retry_interval_ms_ = retry_interval_ms;
-    LOG_INFOF("Reconnect policy set: max_retries=%d, interval=%dms",
-             max_retries, retry_interval_ms);
+
+    // 只在非静默模式下打印日志
+    if (!silent) {
+        LOG_INFOF("Reconnect policy set: max_retries=%d, interval=%dms",
+                 max_retries, retry_interval_ms);
+    }
 }
 
 bool ZmqTransport::reconnect() {

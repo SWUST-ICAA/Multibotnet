@@ -1,8 +1,8 @@
-# Multibotnet v4.1.0
+# Multibotnet v4.1.1
 
 [![ROS Version](https://img.shields.io/badge/ROS-Kinetic%20%7C%20Melodic%20%7C%20Noetic-blue.svg)](http://wiki.ros.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.1.0-brightgreen.svg)](https://github.com/SWUST-ICAA/Multibotnet/releases)
+[![Version](https://img.shields.io/badge/Version-4.1.2-brightgreen.svg)](https://github.com/SWUST-ICAA/Multibotnet/releases)
 
 ## 🎯 基本特性
 

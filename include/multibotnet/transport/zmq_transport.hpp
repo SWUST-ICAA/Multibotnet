@@ -100,8 +100,9 @@ public:
      * @brief 设置重连策略
      * @param max_retries 最大重试次数
      * @param retry_interval_ms 重试间隔（毫秒）
+     * @param silent 是否静默（不打印日志）
      */
-    void setReconnectPolicy(int max_retries, int retry_interval_ms);
+    void setReconnectPolicy(int max_retries, int retry_interval_ms, bool silent = false);
 
     /**
      * @brief 手动触发重连
